@@ -14,6 +14,7 @@ RTSP_PORT="${RTSP_PORT:-8556}"
 
 if ! command -v "$FFMPEG_BIN" >/dev/null 2>&1; then
     echo "FFmpeg introuvable: $FFMPEG_BIN" >&2
+    echo "Installez-le avec: sudo apt update && sudo apt install -y ffmpeg" >&2
     exit 1
 fi
 

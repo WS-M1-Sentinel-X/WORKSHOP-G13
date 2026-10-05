@@ -69,6 +69,33 @@ Sous Linux, `ffmpeg` utilise `/dev/video0` par defaut. Pour choisir un autre per
 VIDEO_DEVICE=/dev/video2 ./scripts/start-camera.sh
 ```
 
+Si FFmpeg n'est pas installe sur Linux :
+
+Ubuntu ou Debian :
+
+```bash
+sudo apt update
+sudo apt install -y ffmpeg v4l-utils
+```
+
+Fedora :
+
+```bash
+sudo dnf install -y ffmpeg v4l-utils
+```
+
+Arch Linux :
+
+```bash
+sudo pacman -S --needed ffmpeg v4l-utils
+```
+
+Verifier ensuite l'installation :
+
+```bash
+ffmpeg -version
+```
+
 Les parametres peuvent etre ajustes sans modifier le script :
 
 ```bash
