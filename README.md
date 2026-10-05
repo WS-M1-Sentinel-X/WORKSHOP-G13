@@ -49,6 +49,32 @@ Le script utilise un profil adapte a une connexion plus fluide :
 - debit video : `1200 kb/s`
 - encodage H.264 avec faible latence
 
+La meme configuration est disponible en Bash pour Windows Git Bash et Linux :
+
+Sous Windows avec Git Bash :
+
+```bash
+./scripts/start-camera.sh
+```
+
+Le script utilise `USB Camera` par defaut. Pour choisir l'autre camera :
+
+```bash
+CAMERA_NAME="HD Camera" ./scripts/start-camera.sh
+```
+
+Sous Linux, `ffmpeg` utilise `/dev/video0` par defaut. Pour choisir un autre peripherique :
+
+```bash
+VIDEO_DEVICE=/dev/video2 ./scripts/start-camera.sh
+```
+
+Les parametres peuvent etre ajustes sans modifier le script :
+
+```bash
+WIDTH=640 HEIGHT=360 FRAMERATE=15 BITRATE_KBPS=700 ./scripts/start-camera.sh
+```
+
 Pour tester l'autre camera detectee par Windows :
 
 ```powershell
