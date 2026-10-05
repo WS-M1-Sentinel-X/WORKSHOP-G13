@@ -1,0 +1,94 @@
+services:
+  # Broker MQTT pour la réception des données de l'ESP8266
+  mqtt:
+    image: eclipse-mosquitto:latest
+    container_name: sentinel-mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "8883:8883" # Port sécurisé MQTTS (requis pour la partie Cyber)
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    networks:
+      - sentinel-net
+
+  # VPN WireGuard pour l'accès distant au réseau Sentinel
+  wireguard:
+    image: lscr.io/linuxserver/wireguard:latest
+    container_name: sentinel-wireguard
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Paris
+      - SERVERURL=${WIREGUARD_SERVERURL:-auto}
+      - SERVERPORT=51820
+      - PEERS=1
+      - PEERDNS=auto
+      - INTERNAL_SUBNET=10.13.13.0
+      - ALLOWEDIPS=0.0.0.0/0
+    volumes:
+      - ./wireguard/config:/config
+      - /lib/modules:/lib/modules:ro
+    ports:
+      - "51820:51820/udp"
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    restart: unless-stopped
+    networks:
+      - sentinel-net
+
+  # Relais et conversion des flux vidéo (RTSP, WebRTC, HLS)
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: sentinel-go2rtc
+    restart: unless-stopped
+    volumes:
+      - ./go2rtc:/config
+    ports:
+      - "1984:1984"
+      - "8554:8554"
+      - "8555:8555/tcp"
+      - "8555:8555/udp"
+    networks:
+      - sentinel-net
+
+  # Serveur d'ingestion RTSP pour le flux produit par FFmpeg sur Windows
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: sentinel-mediamtx
+    restart: unless-stopped
+    ports:
+      - "8556:8554"
+    networks:
+      - sentinel-net
+
+  # Home Assistant pour le Dashboard de supervision
+  homeassistant:
+    image: homeassistant/home-assistant:stable
+    container_name: sentinel-homeassistant
+    restart: unless-stopped
+    privileged: true # Souvent recommandé pour l'accès matériel / réseau local si besoin
+    ports:
+      - "8123:8123"
+    volumes:
+      - ha_config:/config
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - PUID=1000
+      - PGID=1000
+    depends_on:
+      - mqtt
+    networks:
+      - sentinel-net
+
+volumes:
+  ha_config:
+
+networks:
+  sentinel-net:
+    driver: bridge

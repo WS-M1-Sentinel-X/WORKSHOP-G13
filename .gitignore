@@ -1,0 +1,16 @@
+# Environment and local overrides
+.env
+
+# Runtime data
+mosquitto/data/
+mosquitto/log/
+
+# Generated WireGuard keys, profiles and QR codes
+wireguard/config/
+
+# Local editor and OS files
+.vscode/
+.idea/
+*.user
+Thumbs.db
+Desktop.ini
