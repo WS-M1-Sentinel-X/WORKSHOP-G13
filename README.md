@@ -39,7 +39,26 @@ Pour un acces depuis Internet, rediriger le port UDP `51820` de la box vers le P
 La camera USB doit etre capturee par FFmpeg sur Windows, puis publiee vers MediaMTX :
 
 ```powershell
-ffmpeg -f dshow -i "video=NOM_DE_LA_CAMERA" -pix_fmt yuv420p -c:v libx264 -preset ultrafast -tune zerolatency -f rtsp -rtsp_transport tcp rtsp://127.0.0.1:8556/usb
+.\scripts\start-camera.ps1 -CameraName "USB Camera"
+```
+
+Le script utilise un profil adapte a une connexion plus fluide :
+
+- resolution de sortie : `854x480` (480p)
+- cadence : `20 FPS`
+- debit video : `1200 kb/s`
+- encodage H.264 avec faible latence
+
+Pour tester l'autre camera detectee par Windows :
+
+```powershell
+.\scripts\start-camera.ps1 -CameraName "HD Camera"
+```
+
+Si PowerShell bloque l'execution du script pour cette session :
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
 Le flux relaye par go2rtc est ensuite :
