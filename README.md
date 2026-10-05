@@ -69,6 +69,32 @@ Sous Linux, `ffmpeg` utilise `/dev/video0` par defaut. Pour choisir un autre per
 VIDEO_DEVICE=/dev/video2 ./scripts/start-camera.sh
 ```
 
+Avant le lancement, verifier que le peripherique est bien une camera :
+
+```bash
+v4l2-ctl --list-devices
+v4l2-ctl --list-formats-ext -d /dev/video0
+```
+
+Si la camera ne supporte pas `1280x720` a `30 FPS`, utiliser un mode annonce par la
+commande precedente, par exemple :
+
+```bash
+VIDEO_DEVICE=/dev/video0 INPUT_WIDTH=640 INPUT_HEIGHT=480 INPUT_FRAMERATE=15 \
+./scripts/start-camera.sh
+```
+
+Pour une camera qui expose le format MJPEG :
+
+```bash
+VIDEO_DEVICE=/dev/video0 VIDEO_FORMAT=mjpeg ./scripts/start-camera.sh
+```
+
+L'erreur `Link has been severed` indique generalement que le peripherique USB a ete
+deconnecte, que `/dev/video0` n'est pas le bon noeud video, ou que la camera n'est
+pas accessible depuis une VM/WSL. Rebrancher la camera, puis relancer les commandes
+`v4l2-ctl` avant de retester.
+
 Si FFmpeg n'est pas installe sur Linux :
 
 Ubuntu ou Debian :

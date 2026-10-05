@@ -3,6 +3,10 @@ set -Eeuo pipefail
 
 CAMERA_NAME="${CAMERA_NAME:-USB Camera}"
 VIDEO_DEVICE="${VIDEO_DEVICE:-/dev/video0}"
+VIDEO_FORMAT="${VIDEO_FORMAT:-}"
+INPUT_WIDTH="${INPUT_WIDTH:-1280}"
+INPUT_HEIGHT="${INPUT_HEIGHT:-720}"
+INPUT_FRAMERATE="${INPUT_FRAMERATE:-30}"
 STREAM_NAME="${STREAM_NAME:-usb}"
 WIDTH="${WIDTH:-854}"
 HEIGHT="${HEIGHT:-480}"
@@ -32,12 +36,21 @@ if [[ "$OS_NAME" =~ ^(MINGW|MSYS|CYGWIN) ]]; then
         -i "$input"
     )
 elif [[ "$OS_NAME" == "Linux" ]]; then
+    if [[ ! -e "$VIDEO_DEVICE" ]]; then
+        echo "Peripherique video introuvable: $VIDEO_DEVICE" >&2
+        echo "Utilisez: v4l2-ctl --list-devices" >&2
+        exit 1
+    fi
+
     input_args=(
         -f v4l2
-        -video_size 1280x720
-        -framerate 30
-        -i "$VIDEO_DEVICE"
+        -video_size "${INPUT_WIDTH}x${INPUT_HEIGHT}"
+        -framerate "$INPUT_FRAMERATE"
     )
+    if [[ -n "$VIDEO_FORMAT" ]]; then
+        input_args+=(-input_format "$VIDEO_FORMAT")
+    fi
+    input_args+=(-i "$VIDEO_DEVICE")
 else
     echo "Systeme non supporte: $OS_NAME. Utilisez Windows Git Bash ou Linux." >&2
     exit 1
