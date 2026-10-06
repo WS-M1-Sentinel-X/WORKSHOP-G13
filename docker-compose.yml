@@ -47,6 +47,8 @@ services:
     image: alexxit/go2rtc:latest
     container_name: sentinel-go2rtc
     restart: unless-stopped
+    devices:
+      - /dev/video2:/dev/video2 # Si vous utilisez une caméra USB connectée directement au serveur Docker
     volumes:
       - ./go2rtc:/config
     ports:
