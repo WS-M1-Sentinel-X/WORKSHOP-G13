@@ -27,7 +27,8 @@ services:
         fi
         mosquitto_passwd -b /mosquitto/config/passwd ia "$$MQTT_BROKER_PASSWORD_IA"
         mosquitto_passwd -b /mosquitto/config/passwd homeassistant "$$MQTT_BROKER_PASSWORD_HOMEASSISTANT"
-        chmod 644 /mosquitto/config/passwd
+        chown mosquitto:mosquitto /mosquitto/config/passwd /mosquitto/config/acl
+        chmod 0700 /mosquitto/config/passwd /mosquitto/config/acl
         exec mosquitto -c /mosquitto/config/mosquitto.conf
     networks:
       - sentinel-net
