@@ -117,6 +117,8 @@ services:
     environment:
       - MQTT_HOTE=mqtt
       - MQTT_PORT=1883
+      - MQTT_UTILISATEUR=ia
+      - MQTT_MOT_DE_PASSE=${MQTT_BROKER_PASSWORD_IA:?Definis MQTT_BROKER_PASSWORD_IA dans .env}
       - SOURCE_VIDEO=rtsp://go2rtc:8554/${CAMERA_STREAM:-usb}
       - API_ALERTES=${API_ALERTES:-}
       - TZ=Europe/Paris
@@ -139,6 +141,8 @@ services:
     environment:
       - MQTT_HOTE=mqtt
       - MQTT_PORT=1883
+      - MQTT_UTILISATEUR=ia
+      - MQTT_MOT_DE_PASSE=${MQTT_BROKER_PASSWORD_IA:?Definis MQTT_BROKER_PASSWORD_IA dans .env}
       - API_ALERTES=${API_ALERTES:-}
       - TZ=Europe/Paris
     volumes:
