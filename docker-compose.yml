@@ -47,7 +47,6 @@ services:
     image: alexxit/go2rtc:latest
     container_name: sentinel-go2rtc
     restart: unless-stopped
-    privileged: true # Permet de détecter automatiquement la caméra USB peu importe le PC
     volumes:
       - ./go2rtc:/config
     ports:
