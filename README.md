@@ -26,6 +26,8 @@ Interfaces locales :
 | go2rtc | 8554/TCP | Sortie RTSP |
 | go2rtc | 8555/TCP+UDP | Sortie WebRTC |
 | MediaMTX | 8556/TCP | Ingestion RTSP depuis Windows |
+| IA vision | 8090/TCP | Flux webcam annoté par YOLOv8n (MJPEG) |
+| IA anomalies | - | Isolation Forest sur les mesures MQTT (aucun port) |
 
 ## WireGuard
 
@@ -148,8 +150,8 @@ rtsp://go2rtc:8554/usb
 
 ## IA (vision + anomalies)
 
-Le dossier `ia/` contient les deux IA, lancées en Python sur le PC hôte (hors Docker) :
-`vision.py` (YOLOv8n sur le flux webcam relayé par go2rtc) et `anomalies.py` (Isolation Forest sur les mesures MQTT).
+Le dossier `ia/` contient les deux IA, lancées comme services Docker (`ia-vision`, `ia-anomalies`) :
+`vision.py` (YOLOv8n sur le flux webcam relayé par go2rtc, flux annoté sur le port 8090) et `anomalies.py` (Isolation Forest sur les mesures MQTT).
 Elles publient sur Mosquitto (entités créées automatiquement dans Home Assistant) et envoient leurs alertes en `POST /api/v1/alerts`.
 Mode d'emploi complet : [ia/README.md](ia/README.md).
 

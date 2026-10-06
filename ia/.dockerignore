@@ -1,0 +1,7 @@
+# Jamais dans l'image : secrets, environnement local, données générées
+.env
+.venv/
+__pycache__/
+captures/
+modele_anomalies.joblib
+*.pt

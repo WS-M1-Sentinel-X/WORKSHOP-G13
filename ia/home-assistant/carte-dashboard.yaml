@@ -1,6 +1,6 @@
 # Carte à coller dans un tableau de bord HA (Modifier > Ajouter une carte > Manuel).
-# camera.flux_webcam = intégration "MJPEG IP Camera" pointée sur http://host.docker.internal:8090/flux
-# (HA tourne dans Docker : 127.0.0.1 serait le conteneur lui-même, pas le PC qui lance vision.py)
+# camera.flux_webcam = intégration "MJPEG IP Camera" pointée sur http://ia-vision:8090/flux
+# (HA et l'IA vision sont sur le même réseau Docker sentinel-net)
 type: vertical-stack
 cards:
   - type: picture-entity
