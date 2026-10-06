@@ -8,5 +8,5 @@ webrtc:
   listen: ":8555"
 
 streams:
-  usb:
-    - rtsp://mediamtx:8554/usb
+  camera_usb:
+    - exec:ffmpeg -hide_banner -v error -f v4l2 -i /dev/video2 -c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}

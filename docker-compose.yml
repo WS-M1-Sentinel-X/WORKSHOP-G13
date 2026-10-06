@@ -78,16 +78,6 @@ services:
     networks:
       - sentinel-net
 
-  # Serveur d'ingestion RTSP pour le flux produit par FFmpeg sur Windows
-  mediamtx:
-    image: bluenviron/mediamtx:latest
-    container_name: sentinel-mediamtx
-    restart: unless-stopped
-    ports:
-      - "8556:8554"
-    networks:
-      - sentinel-net
-
   # Home Assistant pour le Dashboard de supervision
   homeassistant:
     image: homeassistant/home-assistant:stable
@@ -119,7 +109,7 @@ services:
       - MQTT_PORT=1883
       - MQTT_UTILISATEUR=ia
       - MQTT_MOT_DE_PASSE=${MQTT_BROKER_PASSWORD_IA:?Definis MQTT_BROKER_PASSWORD_IA dans .env}
-      - SOURCE_VIDEO=rtsp://go2rtc:8554/${CAMERA_STREAM:-usb}
+      - SOURCE_VIDEO=rtsp://go2rtc:8554/${CAMERA_STREAM:-camera_usb}
       - API_ALERTES=${API_ALERTES:-}
       - TZ=Europe/Paris
     volumes:

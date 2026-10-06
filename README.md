@@ -1,6 +1,6 @@
 # Sentinel
 
-Stack Docker Compose pour un broker MQTT dedie, Home Assistant, WireGuard et les flux video.
+Stack Docker Compose pour un broker MQTT dedie, Home Assistant, WireGuard et les flux video Ubuntu.
 
 ## Demarrage
 
@@ -26,7 +26,6 @@ Interfaces locales :
 | go2rtc | 1984/TCP | API et relais video |
 | go2rtc | 8554/TCP | Sortie RTSP |
 | go2rtc | 8555/TCP+UDP | Sortie WebRTC |
-| MediaMTX | 8556/TCP | Ingestion RTSP depuis Windows |
 | IA vision | 8090/TCP | Flux webcam annoté par YOLOv8n (MJPEG) |
 | IA anomalies | - | Isolation Forest sur les mesures MQTT (aucun port) |
 
@@ -37,60 +36,16 @@ Ce dossier est ignore par Git car il contient des cles privees et ne doit pas et
 
 Pour un acces depuis Internet, rediriger le port UDP `51820` de la box vers le PC Docker.
 
-## Camera USB Windows
+## Camera USB Ubuntu
 
-La camera USB doit etre capturee par FFmpeg sur Windows, puis publiee vers MediaMTX :
-
-```powershell
-.\scripts\start-camera.ps1 -CameraName "USB Camera"
-```
-
-Le script utilise un profil adapte a une connexion plus fluide :
-
-- resolution de sortie : `854x480` (480p)
-- cadence : `20 FPS`
-- debit video : `1200 kb/s`
-- encodage H.264 avec faible latence
-
-La meme configuration est disponible en Bash pour Windows Git Bash et Linux :
-
-Sous Windows avec Git Bash :
-
-```bash
-./scripts/start-camera.sh
-```
-
-Le script utilise `USB Camera` par defaut. Pour choisir l'autre camera :
-
-```bash
-CAMERA_NAME="HD Camera" ./scripts/start-camera.sh
-```
-
-Sous Linux, `ffmpeg` utilise `/dev/video0` par defaut. Pour choisir un autre peripherique :
-
-```bash
-VIDEO_DEVICE=/dev/video2 ./scripts/start-camera.sh
-```
+Go2RTC capture directement la camera exposee par Linux (`/dev/video2`) et publie le flux
+sous le nom `camera_usb`. Pour verifier le peripherique :
 
 Avant le lancement, verifier que le peripherique est bien une camera :
 
 ```bash
 v4l2-ctl --list-devices
-v4l2-ctl --list-formats-ext -d /dev/video0
-```
-
-Si la camera ne supporte pas `1280x720` a `30 FPS`, utiliser un mode annonce par la
-commande precedente, par exemple :
-
-```bash
-VIDEO_DEVICE=/dev/video0 INPUT_WIDTH=640 INPUT_HEIGHT=480 INPUT_FRAMERATE=15 \
-./scripts/start-camera.sh
-```
-
-Pour une camera qui expose le format MJPEG :
-
-```bash
-VIDEO_DEVICE=/dev/video0 VIDEO_FORMAT=mjpeg ./scripts/start-camera.sh
+v4l2-ctl --list-formats-ext -d /dev/video2
 ```
 
 L'erreur `Link has been severed` indique generalement que le peripherique USB a ete
@@ -125,28 +80,10 @@ Verifier ensuite l'installation :
 ffmpeg -version
 ```
 
-Les parametres peuvent etre ajustes sans modifier le script :
-
-```bash
-WIDTH=640 HEIGHT=360 FRAMERATE=15 BITRATE_KBPS=700 ./scripts/start-camera.sh
-```
-
-Pour tester l'autre camera detectee par Windows :
-
-```powershell
-.\scripts\start-camera.ps1 -CameraName "HD Camera"
-```
-
-Si PowerShell bloque l'execution du script pour cette session :
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-```
-
 Le flux relaye par go2rtc est ensuite :
 
 ```text
-rtsp://go2rtc:8554/usb
+rtsp://go2rtc:8554/camera_usb
 ```
 
 ## IA (vision + anomalies)

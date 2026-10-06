@@ -10,10 +10,10 @@
     python vision.py                 # webcam 0
     python vision.py --camera 1      # autre webcam
     python vision.py --source video.mp4 --sans-fenetre   # tester sur une vidéo
-    python vision.py --source rtsp://127.0.0.1:8554/usb  # flux relayé par go2rtc (stack Docker)
+    python vision.py --source rtsp://127.0.0.1:8554/camera_usb  # flux relayé par go2rtc (stack Docker)
 
-Sur la stack WORKSHOP-G13, FFmpeg capture déjà la webcam pour MediaMTX : sous Windows
-une webcam ne s'ouvre qu'une fois, donc on lit le flux RTSP de go2rtc (SOURCE_VIDEO dans .env).
+Sur la stack WORKSHOP-G13, Go2RTC capture directement la webcam USB Ubuntu. L'IA lit
+le flux RTSP relayé par Go2RTC (SOURCE_VIDEO dans .env).
 """
 
 import argparse

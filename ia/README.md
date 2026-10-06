@@ -46,7 +46,7 @@ docker compose up -d --build ia-vision ia-anomalies
 docker compose logs -f ia-vision ia-anomalies
 ```
 
-- `ia-vision` lit `rtsp://go2rtc:8554/<CAMERA_STREAM>` (dans le `.env` racine : `camera_usb` sur le serveur Sentinel) et sert le flux annoté sur http://<serveur>:8090/flux.
+- `ia-vision` lit `rtsp://go2rtc:8554/<CAMERA_STREAM>` (`camera_usb` sur Ubuntu) et sert le flux annoté sur http://<serveur>:8090/flux.
 - `ia-anomalies` apprend sur `IA_APPRENTISSAGE` mesures (1 200 par défaut, soit 20 min), puis surveille.
 - Le modèle appris et les captures d'intrusion sont dans le volume `ia_donnees` : ils survivent aux redémarrages. Pour réapprendre : `docker compose run --rm ia-anomalies python anomalies.py --reset`.
 - `API_ALERTES` (`.env` racine) : l'adresse de l'API des devs, vide tant qu'elle n'existe pas (les alertes sont alors journalisées).
@@ -65,10 +65,10 @@ cp .env.example .env
 Le `.env.example` est déjà réglé pour le broker Mosquitto dédié de ce dépôt : `127.0.0.1:1883` avec l'utilisateur `ia`, la webcam lue via go2rtc (`SOURCE_VIDEO=rtsp://127.0.0.1:8554/usb`) et la fausse API sur le port 8000. Il suffit donc de copier les deux fichiers `.env.example` en `.env`, puis de démarrer la stack depuis la racine du dépôt :
 
 ```bash
-docker compose up -d mqtt mediamtx go2rtc homeassistant
+docker compose up -d mqtt go2rtc homeassistant
 ```
 
-> **Pourquoi lire la webcam via go2rtc ?** Sous Windows, une webcam USB ne peut être ouverte que par un seul programme. Comme FFmpeg la capture déjà pour MediaMTX (voir le README racine), `vision.py` lit le flux relayé par go2rtc au lieu d'ouvrir la caméra. Pour tester sans la stack, vide `SOURCE_VIDEO` : le script ouvre alors la webcam directement.
+> **Pourquoi lire la webcam via go2rtc ?** Go2RTC capture directement la webcam USB Ubuntu et la rend disponible en RTSP. `vision.py` lit ce flux relayé au lieu d'ouvrir la caméra lui-même.
 
 Puis, dans 4 terminaux :
 
