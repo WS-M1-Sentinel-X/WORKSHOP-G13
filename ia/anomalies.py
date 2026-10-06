@@ -20,10 +20,10 @@ import joblib
 import numpy as np
 from sklearn.ensemble import IsolationForest
 
-from commun import DOSSIER, charger_config, creer_client_mqtt, declarer_entite, envoyer_alerte
+from commun import DONNEES, charger_config, creer_client_mqtt, declarer_entite, envoyer_alerte
 
 NOM = "anomalies"
-FICHIER_MODELE = DOSSIER / "modele_anomalies.joblib"
+FICHIER_MODELE = DONNEES / "modele_anomalies.joblib"
 GRANDEURS = ["temperature", "humidite", "gaz"]
 COLONNES = GRANDEURS + [f"pente_{g}" for g in GRANDEURS]
 TOPIC_ETAT = "sentinel/ia/anomalies/etat"

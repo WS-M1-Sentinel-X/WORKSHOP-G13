@@ -37,6 +37,22 @@ vision.py ──> flux MJPEG :8090/flux ──> carte caméra HA (et dashboard d
 | `home-assistant/` | Automatisations (buzzer/LED), carte de dashboard, extrait de `configuration.yaml` |
 | `.env.example` | Modèle de configuration (copie-le en `.env`, jamais commité) |
 
+## Lancer dans Docker (le mode de la démo)
+
+Les deux IA sont des services du `docker-compose.yml` racine, construits depuis `ia/Dockerfile` (une image commune, PyTorch CPU, YOLOv8n intégré, utilisateur non-root) :
+
+```bash
+docker compose up -d --build ia-vision ia-anomalies
+docker compose logs -f ia-vision ia-anomalies
+```
+
+- `ia-vision` lit `rtsp://go2rtc:8554/<CAMERA_STREAM>` (dans le `.env` racine : `camera_usb` sur le serveur Sentinel) et sert le flux annoté sur http://<serveur>:8090/flux.
+- `ia-anomalies` apprend sur `IA_APPRENTISSAGE` mesures (1 200 par défaut, soit 20 min), puis surveille.
+- Le modèle appris et les captures d'intrusion sont dans le volume `ia_donnees` : ils survivent aux redémarrages. Pour réapprendre : `docker compose run --rm ia-anomalies python anomalies.py --reset`.
+- `API_ALERTES` (`.env` racine) : l'adresse de l'API des devs, vide tant qu'elle n'existe pas (les alertes sont alors journalisées).
+
+> **Pourquoi la vision peut être dans Docker :** la webcam USB est branchée sur le serveur et publiée par go2rtc sur le réseau. Le conteneur n'a donc pas besoin d'accéder au périphérique USB, seulement au flux RTSP. YOLO y tourne sur le CPU seul : vérifie `sensor.sentinel_ia_inference_ms` (objectif < 100 ms).
+
 ## Lancer en 5 minutes (sur ton PC, sans le boîtier)
 
 ```bash
@@ -92,8 +108,8 @@ Pour activer MQTTS plus tard, ajoute un listener TLS `8883` dans la configuratio
 4. Lancer tes scripts : l'appareil **« Sentinel-X IA »** apparaît tout seul avec ses entités :
    - `binary_sensor.sentinel_ia_presence_humaine`, `sensor.sentinel_ia_personnes`, `sensor.sentinel_ia_inference_ms`, `camera.sentinel_ia_derniere_intrusion`
    - `sensor.sentinel_ia_score_risque`, `binary_sensor.sentinel_ia_anomalie`, `sensor.sentinel_ia_cause`, `sensor.sentinel_ia_phase`
-5. Ajouter l'intégration **MJPEG IP Camera** sur `http://host.docker.internal:8090/flux` (nomme-la « Flux webcam »). Attention : `127.0.0.1` désignerait le conteneur HA lui-même, pas le PC où tourne `vision.py`.
-6. Copier `home-assistant/automations.yaml` (buzzer + LED rouge sur intrusion ou anomalie) dans la config de HA, qui vit dans le volume Docker `ha_config` : `docker cp home-assistant/automations.yaml sentinel-homeassistant:/config/automations.yaml`, puis **Outils de développement > YAML > Recharger les automatisations**. Coller ensuite la carte `carte-dashboard.yaml` dans un tableau de bord.
+4. Ajouter l'intégration **MJPEG IP Camera** sur `http://ia-vision:8090/flux` (nomme-la « Flux webcam ») : HA et l'IA sont sur le même réseau Docker. Si tu lances `vision.py` hors Docker, utilise l'IP du PC à la place.
+5. Copier `home-assistant/automations.yaml` (buzzer + LED rouge sur intrusion ou anomalie) dans la config de HA, qui vit dans le volume Docker `ha_config` : `docker cp home-assistant/automations.yaml sentinel-homeassistant:/config/automations.yaml`, puis **Outils de développement > YAML > Recharger les automatisations**. Coller ensuite la carte `carte-dashboard.yaml` dans un tableau de bord.
 
 Si un identifiant d'entité diffère chez vous, regarde-le dans l'appareil « Sentinel-X IA » et corrige-le dans les YAML.
 

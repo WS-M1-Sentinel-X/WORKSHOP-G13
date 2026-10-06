@@ -96,15 +96,56 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
-    extra_hosts:
-      - "host.docker.internal:host-gateway" # joindre le flux MJPEG de l'IA vision (ia/vision.py :8090)
     depends_on:
       - mqtt
     networks:
       - sentinel-net
 
+  # IA vision : YOLOv8n sur le flux webcam relayé par go2rtc, flux annoté MJPEG sur :8090
+  ia-vision:
+    build: ./ia
+    image: sentinel-ia
+    container_name: sentinel-ia-vision
+    restart: unless-stopped
+    command: ["python", "vision.py", "--sans-fenetre"]
+    environment:
+      - MQTT_HOTE=mqtt
+      - MQTT_PORT=1883
+      - SOURCE_VIDEO=rtsp://go2rtc:8554/${CAMERA_STREAM:-usb}
+      - API_ALERTES=${API_ALERTES:-}
+      - TZ=Europe/Paris
+    volumes:
+      - ia_donnees:/donnees # captures horodatées des intrusions (preuves)
+    ports:
+      - "8090:8090"
+    depends_on:
+      - mqtt
+      - go2rtc
+    networks:
+      - sentinel-net
+
+  # IA prédictive : Isolation Forest sur les mesures capteurs reçues par MQTT
+  ia-anomalies:
+    image: sentinel-ia
+    container_name: sentinel-ia-anomalies
+    restart: unless-stopped
+    command: ["python", "anomalies.py", "--apprentissage", "${IA_APPRENTISSAGE:-1200}"]
+    environment:
+      - MQTT_HOTE=mqtt
+      - MQTT_PORT=1883
+      - API_ALERTES=${API_ALERTES:-}
+      - TZ=Europe/Paris
+    volumes:
+      - ia_donnees:/donnees # modèle appris : conservé entre deux redémarrages
+    depends_on:
+      - mqtt
+      - ia-vision # construit l'image sentinel-ia partagée
+    networks:
+      - sentinel-net
+
 volumes:
   ha_config:
+  ia_donnees:
 
 networks:
   sentinel-net:

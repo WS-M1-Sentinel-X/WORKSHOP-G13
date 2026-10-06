@@ -28,7 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import cv2
 from ultralytics import YOLO
 
-from commun import DOSSIER, charger_config, creer_client_mqtt, declarer_entite, envoyer_alerte
+from commun import DONNEES, charger_config, creer_client_mqtt, declarer_entite, envoyer_alerte
 
 NOM = "vision"
 TOPIC_ETAT = "sentinel/ia/vision/etat"
@@ -139,7 +139,7 @@ def main():
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     cfg = charger_config()
-    (DOSSIER / "captures").mkdir(exist_ok=True)
+    (DONNEES / "captures").mkdir(parents=True, exist_ok=True)
     source = args.source if args.source is not None else cfg["source_video"]
     # Un flux réseau (rtsp://, http://) est "vivant" : on attend s'il coupe ; un fichier se termine.
     fichier_video = bool(source) and "://" not in source
@@ -222,7 +222,7 @@ def main():
             if nouvelle_intrusion:
                 confirmee = time.monotonic() - dernier_pir["t"] < 10
                 horodatage = datetime.now().strftime("%Y%m%d-%H%M%S")
-                chemin = DOSSIER / "captures" / f"intrusion-{horodatage}.jpg"
+                chemin = DONNEES / "captures" / f"intrusion-{horodatage}.jpg"
                 cv2.imwrite(str(chemin), annotee)
                 client.publish(TOPIC_IMAGE, cv2.imencode(".jpg", annotee)[1].tobytes(), retain=True)
                 envoyer_alerte(

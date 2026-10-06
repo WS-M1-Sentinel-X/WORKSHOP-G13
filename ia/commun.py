@@ -17,6 +17,8 @@ from pathlib import Path
 import paho.mqtt.client as mqtt
 
 DOSSIER = Path(__file__).resolve().parent
+# Modèle appris et captures : à part du code, pour être monté en volume dans Docker.
+DONNEES = Path(os.getenv("DOSSIER_DONNEES", DOSSIER))
 log = logging.getLogger("sentinel-ia")
 
 # Toutes les entités IA sont regroupées sous un seul "appareil" dans Home Assistant.
