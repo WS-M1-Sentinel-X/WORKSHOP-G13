@@ -20,9 +20,14 @@ services:
       - -c
       - |
         set -eu
-        mosquitto_passwd -b -c /mosquitto/config/passwd esp8266 "$$MQTT_BROKER_PASSWORD_ESP8266"
+        if [ ! -f /mosquitto/config/passwd ]; then
+          mosquitto_passwd -b -c /mosquitto/config/passwd esp8266 "$$MQTT_BROKER_PASSWORD_ESP8266"
+        else
+          mosquitto_passwd -b /mosquitto/config/passwd esp8266 "$$MQTT_BROKER_PASSWORD_ESP8266"
+        fi
         mosquitto_passwd -b /mosquitto/config/passwd ia "$$MQTT_BROKER_PASSWORD_IA"
         mosquitto_passwd -b /mosquitto/config/passwd homeassistant "$$MQTT_BROKER_PASSWORD_HOMEASSISTANT"
+        chmod 644 /mosquitto/config/passwd
         exec mosquitto -c /mosquitto/config/mosquitto.conf
     networks:
       - sentinel-net
