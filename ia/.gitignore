@@ -1,0 +1,6 @@
+.env
+captures/
+modele_anomalies.joblib
+*.pt
+__pycache__/
+.venv/

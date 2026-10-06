@@ -146,4 +146,11 @@ Le flux relaye par go2rtc est ensuite :
 rtsp://go2rtc:8554/usb
 ```
 
+## IA (vision + anomalies)
+
+Le dossier `ia/` contient les deux IA, lancées en Python sur le PC hôte (hors Docker) :
+`vision.py` (YOLOv8n sur le flux webcam relayé par go2rtc) et `anomalies.py` (Isolation Forest sur les mesures MQTT).
+Elles publient sur Mosquitto (entités créées automatiquement dans Home Assistant) et envoient leurs alertes en `POST /api/v1/alerts`.
+Mode d'emploi complet : [ia/README.md](ia/README.md).
+
 Ne pas publier directement les ports Home Assistant, MQTT ou go2rtc sur Internet. Utiliser WireGuard pour l'acces distant.

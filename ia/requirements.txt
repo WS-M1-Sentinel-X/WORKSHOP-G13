@@ -1,0 +1,6 @@
+paho-mqtt>=2.0
+numpy
+scikit-learn
+joblib
+ultralytics        # YOLOv8 (installe aussi torch et opencv)
+opencv-python

@@ -1,0 +1,56 @@
+# Automatisations Home Assistant qui réagissent aux deux IA.
+# Le format de sentinel/commandes est à caler avec le firmware des devs (contrat JSON).
+
+- id: sentinel_intrusion
+  alias: "Sentinel-X : intrusion détectée par l'IA"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.sentinel_ia_presence_humaine
+      to: "on"
+  action:
+    - service: mqtt.publish
+      data:
+        topic: sentinel/commandes
+        payload: '{"buzzer": "on", "led": "rouge"}'
+    - service: persistent_notification.create
+      data:
+        title: "Intrusion"
+        message: "{{ states('sensor.sentinel_ia_personnes') }} personne(s) devant la caméra."
+
+- id: sentinel_anomalie
+  alias: "Sentinel-X : anomalie capteurs"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.sentinel_ia_anomalie
+      to: "on"
+  action:
+    - service: mqtt.publish
+      data:
+        topic: sentinel/commandes
+        payload: '{"buzzer": "bip", "led": "rouge"}'
+    - service: persistent_notification.create
+      data:
+        title: "Anomalie capteurs"
+        message: "{{ states('sensor.sentinel_ia_cause') }} (risque {{ states('sensor.sentinel_ia_score_risque') }} %)"
+
+- id: sentinel_retour_normal
+  alias: "Sentinel-X : retour à la normale"
+  trigger:
+    - platform: state
+      entity_id:
+        - binary_sensor.sentinel_ia_presence_humaine
+        - binary_sensor.sentinel_ia_anomalie
+      to: "off"
+      for: "00:00:10"
+  condition:
+    - condition: state
+      entity_id: binary_sensor.sentinel_ia_presence_humaine
+      state: "off"
+    - condition: state
+      entity_id: binary_sensor.sentinel_ia_anomalie
+      state: "off"
+  action:
+    - service: mqtt.publish
+      data:
+        topic: sentinel/commandes
+        payload: '{"buzzer": "off", "led": "vert"}'

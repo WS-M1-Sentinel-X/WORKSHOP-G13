@@ -1,0 +1,30 @@
+# Carte à coller dans un tableau de bord HA (Modifier > Ajouter une carte > Manuel).
+# camera.flux_webcam = intégration "MJPEG IP Camera" pointée sur http://host.docker.internal:8090/flux
+# (HA tourne dans Docker : 127.0.0.1 serait le conteneur lui-même, pas le PC qui lance vision.py)
+type: vertical-stack
+cards:
+  - type: picture-entity
+    entity: camera.flux_webcam
+    camera_view: live
+    name: Webcam (YOLOv8n)
+  - type: glance
+    title: IA Sentinel-X
+    entities:
+      - binary_sensor.sentinel_ia_presence_humaine
+      - sensor.sentinel_ia_personnes
+      - binary_sensor.sentinel_ia_anomalie
+      - sensor.sentinel_ia_inference_ms
+  - type: gauge
+    entity: sensor.sentinel_ia_score_risque
+    name: Risque capteurs
+    severity:
+      green: 0
+      yellow: 50
+      red: 80
+  - type: entities
+    entities:
+      - sensor.sentinel_ia_cause
+      - sensor.sentinel_ia_phase
+  - type: picture-entity
+    entity: camera.sentinel_ia_derniere_intrusion
+    name: Dernière intrusion (preuve)

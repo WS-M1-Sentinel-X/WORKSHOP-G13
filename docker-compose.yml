@@ -81,6 +81,8 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # joindre le flux MJPEG de l'IA vision (ia/vision.py :8090)
     depends_on:
       - mqtt
     networks:
