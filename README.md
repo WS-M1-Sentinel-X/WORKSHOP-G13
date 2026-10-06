@@ -1,6 +1,6 @@
 # Sentinel
 
-Stack Docker Compose pour Home Assistant, MQTT, WireGuard et les flux video.
+Stack Docker Compose pour un broker MQTT dedie, Home Assistant, WireGuard et les flux video.
 
 ## Demarrage
 
@@ -20,7 +20,8 @@ Interfaces locales :
 | Service | Port | Role |
 | --- | --- | --- |
 | Home Assistant | 8123/TCP | Supervision et tableau de bord |
-| Mosquitto | 1883/TCP | Broker MQTT pour l'ESP8266 |
+| Mosquitto | 1883/TCP | Broker MQTT dedie et authentifie pour l'ESP8266, l'IA et Home Assistant |
+| Mosquitto | 9001/TCP | MQTT over WebSocket (optionnel) |
 | WireGuard | 51820/UDP | Acces VPN distant |
 | go2rtc | 1984/TCP | API et relais video |
 | go2rtc | 8554/TCP | Sortie RTSP |
@@ -150,7 +151,7 @@ rtsp://go2rtc:8554/usb
 
 Le dossier `ia/` contient les deux IA, lancées en Python sur le PC hôte (hors Docker) :
 `vision.py` (YOLOv8n sur le flux webcam relayé par go2rtc) et `anomalies.py` (Isolation Forest sur les mesures MQTT).
-Elles publient sur Mosquitto (entités créées automatiquement dans Home Assistant) et envoient leurs alertes en `POST /api/v1/alerts`.
+Elles publient sur le broker Mosquitto dedie (entites creees automatiquement dans Home Assistant) et envoient leurs alertes en `POST /api/v1/alerts`.
 Mode d'emploi complet : [ia/README.md](ia/README.md).
 
-Ne pas publier directement les ports Home Assistant, MQTT ou go2rtc sur Internet. Utiliser WireGuard pour l'acces distant.
+Le broker MQTT est independant de Home Assistant : si Home Assistant est arrete, l'ESP8266 et les scripts IA peuvent continuer a communiquer. Ne pas publier directement les ports Home Assistant, MQTT ou go2rtc sur Internet. Utiliser WireGuard pour l'acces distant.

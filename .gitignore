@@ -4,6 +4,7 @@
 # Runtime data
 mosquitto/data/
 mosquitto/log/
+mosquitto/config/passwd
 
 # Generated WireGuard keys, profiles and QR codes
 wireguard/config/

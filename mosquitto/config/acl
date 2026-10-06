@@ -1,0 +1,17 @@
+# Chaque composant ne voit que les topics dont il a besoin.
+user esp8266
+topic write station/+/capteurs
+topic write station/+/etat
+topic read station/+/cmd/#
+
+user ia
+topic read station/#
+topic read sentinel/#
+topic write sentinel/#
+topic write homeassistant/#
+
+user homeassistant
+topic read station/#
+topic read sentinel/#
+topic read homeassistant/#
+topic write station/+/cmd/#

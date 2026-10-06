@@ -8,8 +8,8 @@ Tu n'écris donc **rien dans Home Assistant lui-même** : pas d'add-on, pas d'in
 
 ```
 Webcam USB ──> vision.py (YOLOv8n) ──┐
-                                     ├── MQTT (Mosquitto :8883) ──> Home Assistant (entités auto, automatisations, buzzer/LED)
-ESP8266 ──> sentinel/capteurs ──> anomalies.py (Isolation Forest) ──┘
+                                     ├── MQTT (Mosquitto dédié :1883) ──> Home Assistant (entités auto, automatisations, buzzer/LED)
+ESP8266 ──> station/station1/capteurs ──> anomalies.py (Isolation Forest) ──┘
                                      └── POST /api/v1/alerts ──> API de l'équipe ──> BDD + dashboard
 vision.py ──> flux MJPEG :8090/flux ──> carte caméra HA (et dashboard des devs)
 ```
@@ -46,7 +46,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Le `.env.example` est déjà réglé pour la stack Docker de ce dépôt : Mosquitto sur `127.0.0.1:1883` sans TLS, la webcam lue via go2rtc (`SOURCE_VIDEO=rtsp://127.0.0.1:8554/usb`) et la fausse API sur le port 8000. Il suffit donc de démarrer la stack depuis la racine du dépôt :
+Le `.env.example` est déjà réglé pour le broker Mosquitto dédié de ce dépôt : `127.0.0.1:1883` avec l'utilisateur `ia`, la webcam lue via go2rtc (`SOURCE_VIDEO=rtsp://127.0.0.1:8554/usb`) et la fausse API sur le port 8000. Il suffit donc de copier les deux fichiers `.env.example` en `.env`, puis de démarrer la stack depuis la racine du dépôt :
 
 ```bash
 docker compose up -d mqtt mediamtx go2rtc homeassistant
@@ -82,23 +82,24 @@ Ces chiffres sont parfaits pour la documentation IA du dossier : refais-les sur 
 
 Une Isolation Forest **sature** en dehors de ce qu'elle a appris : un gaz à 900 peut obtenir le même score que le point le plus extrême vu pendant l'apprentissage, donc parfois « normal ». Le script en tient compte : une fois l'alerte levée, elle ne retombe que lorsque le score redevient **typique** (< 40) pendant 10 mesures. Autre conséquence : l'apprentissage doit couvrir toute la variation normale. Sur le vrai boîtier, apprends plutôt **15 à 30 minutes** (`--apprentissage 1200` à une mesure par seconde) en faisant varier un peu la pièce.
 
-Quand l'équipe cloud aura monté Mosquitto en MQTTS : remets `MQTT_PORT=8883`, `MQTT_CA=` vers le `ca.crt` de la CA locale, un utilisateur `ia` avec ses ACL, et `API_ALERTES=https://192.168.10.1/api/v1/alerts`.
+Pour activer MQTTS plus tard, ajoute un listener TLS `8883` dans la configuration Mosquitto, monte le certificat de la CA, puis configure `MQTT_PORT=8883` et `MQTT_CA=` vers le `ca.crt` local.
 
 ## Côté Home Assistant
 
 1. Home Assistant tourne déjà dans la stack (`sentinel-homeassistant`, http://localhost:8123).
-2. Dans HA : **Paramètres > Appareils et services > Ajouter > MQTT**, broker `mqtt` (le nom du service Docker), port 1883. Quand Mosquitto passera en MQTTS : port 8883 + TLS avec le `ca.crt`. La découverte (préfixe `homeassistant`) est active par défaut.
-3. Lancer tes scripts : l'appareil **« Sentinel-X IA »** apparaît tout seul avec ses entités :
+2. Dans HA : **Paramètres > Appareils et services > Ajouter > MQTT**, broker `mqtt` (le nom du service Docker), port 1883, utilisateur `homeassistant` et le mot de passe correspondant à `MQTT_BROKER_PASSWORD_HOMEASSISTANT`. La découverte (préfixe `homeassistant`) est active par défaut.
+3. Pour l'ESP8266, renseigner l'IP LAN de la machine Docker, l'utilisateur `esp8266` et `MQTT_BROKER_PASSWORD_ESP8266`. Le broker n'est plus celui d'un add-on ou de Home Assistant.
+4. Lancer tes scripts : l'appareil **« Sentinel-X IA »** apparaît tout seul avec ses entités :
    - `binary_sensor.sentinel_ia_presence_humaine`, `sensor.sentinel_ia_personnes`, `sensor.sentinel_ia_inference_ms`, `camera.sentinel_ia_derniere_intrusion`
    - `sensor.sentinel_ia_score_risque`, `binary_sensor.sentinel_ia_anomalie`, `sensor.sentinel_ia_cause`, `sensor.sentinel_ia_phase`
-4. Ajouter l'intégration **MJPEG IP Camera** sur `http://host.docker.internal:8090/flux` (nomme-la « Flux webcam »). Attention : `127.0.0.1` désignerait le conteneur HA lui-même, pas le PC où tourne `vision.py`.
-5. Copier `home-assistant/automations.yaml` (buzzer + LED rouge sur intrusion ou anomalie) dans la config de HA, qui vit dans le volume Docker `ha_config` : `docker cp home-assistant/automations.yaml sentinel-homeassistant:/config/automations.yaml`, puis **Outils de développement > YAML > Recharger les automatisations**. Coller ensuite la carte `carte-dashboard.yaml` dans un tableau de bord.
+5. Ajouter l'intégration **MJPEG IP Camera** sur `http://host.docker.internal:8090/flux` (nomme-la « Flux webcam »). Attention : `127.0.0.1` désignerait le conteneur HA lui-même, pas le PC où tourne `vision.py`.
+6. Copier `home-assistant/automations.yaml` (buzzer + LED rouge sur intrusion ou anomalie) dans la config de HA, qui vit dans le volume Docker `ha_config` : `docker cp home-assistant/automations.yaml sentinel-homeassistant:/config/automations.yaml`, puis **Outils de développement > YAML > Recharger les automatisations**. Coller ensuite la carte `carte-dashboard.yaml` dans un tableau de bord.
 
 Si un identifiant d'entité diffère chez vous, regarde-le dans l'appareil « Sentinel-X IA » et corrige-le dans les YAML.
 
 ### Le contrat JSON (à valider avec les devs dès aujourd'hui)
 
-Message capteur publié par l'ESP8266 sur `sentinel/capteurs` :
+Message capteur publié par l'ESP8266 sur `station/station1/capteurs` :
 ```json
 {"id": "sentinel-x-01", "temperature": 23.4, "humidite": 45.1, "gaz": 182, "mouvement": 0, "ts": "2026-10-06T09:12:00+00:00"}
 ```

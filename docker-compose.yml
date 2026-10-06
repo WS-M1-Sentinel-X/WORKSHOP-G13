@@ -1,16 +1,29 @@
 services:
   # Broker MQTT pour la réception des données de l'ESP8266
   mqtt:
-    image: eclipse-mosquitto:latest
+    image: eclipse-mosquitto:2
     container_name: sentinel-mqtt
     restart: unless-stopped
     ports:
       - "1883:1883"
-      - "8883:8883" # Port sécurisé MQTTS (requis pour la partie Cyber)
+      - "9001:9001" # MQTT over WebSocket (optionnel)
+    environment:
+      MQTT_BROKER_PASSWORD_ESP8266: ${MQTT_BROKER_PASSWORD_ESP8266:?Definis MQTT_BROKER_PASSWORD_ESP8266 dans .env}
+      MQTT_BROKER_PASSWORD_IA: ${MQTT_BROKER_PASSWORD_IA:?Definis MQTT_BROKER_PASSWORD_IA dans .env}
+      MQTT_BROKER_PASSWORD_HOMEASSISTANT: ${MQTT_BROKER_PASSWORD_HOMEASSISTANT:?Definis MQTT_BROKER_PASSWORD_HOMEASSISTANT dans .env}
     volumes:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        mosquitto_passwd -b -c /mosquitto/config/passwd esp8266 "$$MQTT_BROKER_PASSWORD_ESP8266"
+        mosquitto_passwd -b /mosquitto/config/passwd ia "$$MQTT_BROKER_PASSWORD_IA"
+        mosquitto_passwd -b /mosquitto/config/passwd homeassistant "$$MQTT_BROKER_PASSWORD_HOMEASSISTANT"
+        exec mosquitto -c /mosquitto/config/mosquitto.conf
     networks:
       - sentinel-net
 

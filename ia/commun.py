@@ -40,11 +40,11 @@ def charger_config():
 
     return {
         "mqtt_hote": os.getenv("MQTT_HOTE", "127.0.0.1"),
-        "mqtt_port": int(os.getenv("MQTT_PORT", "8883")),
+        "mqtt_port": int(os.getenv("MQTT_PORT", "1883")),
         "mqtt_utilisateur": os.getenv("MQTT_UTILISATEUR", ""),
         "mqtt_mot_de_passe": os.getenv("MQTT_MOT_DE_PASSE", ""),
         "mqtt_ca": os.getenv("MQTT_CA", ""),
-        "topic_capteurs": os.getenv("TOPIC_CAPTEURS", "sentinel/capteurs"),
+        "topic_capteurs": os.getenv("TOPIC_CAPTEURS", "station/station1/capteurs"),
         "prefixe_discovery": os.getenv("PREFIXE_DISCOVERY", "homeassistant"),
         "api_alertes": os.getenv("API_ALERTES", ""),
         "api_ca": os.getenv("API_CA", ""),
