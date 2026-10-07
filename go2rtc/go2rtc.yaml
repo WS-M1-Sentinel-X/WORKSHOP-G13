@@ -11,4 +11,4 @@ webrtc:
 # sans le réencodage H.264 qui saturait le Celeron.
 streams:
   camera_usb:
-    - http://ia-vision:8090/flux
+    - "ffmpeg:/dev/video1#video=h264"
