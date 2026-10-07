@@ -67,7 +67,7 @@ services:
     container_name: sentinel-go2rtc
     restart: unless-stopped
     devices:
-      - /dev/video2:/dev/video2 # Si vous utilisez une caméra USB connectée directement au serveur Docker
+      - /dev/video0:/dev/video0 # Si vous utilisez une caméra USB connectée directement au serveur Docker
     volumes:
       - ./go2rtc:/config
     ports:
