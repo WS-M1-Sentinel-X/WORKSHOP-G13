@@ -30,28 +30,69 @@ vision.py ──> flux MJPEG :8090/flux ──> carte caméra HA (et dashboard d
 | Fichier | Rôle |
 |---|---|
 | `commun.py` | Configuration, connexion MQTT (TLS), MQTT Discovery, envoi `POST /api/v1/alerts` |
-| `vision.py` | YOLOv8n sur la webcam, 640 px de large (proportions gardées), anti-rebond, flux MJPEG, capture de preuve, fusion avec le PIR |
+| `vision.py` | YOLOv8n en temps réel (dernière image seulement), suivi des personnes, contrôle d'accès par visage, annonce vocale, flux MJPEG, capture de preuve, fusion avec le PIR |
+| `visages.py` | Bibliothèque de personnes : détection (YuNet), signature (SFace), comparaison, suivi d'une image à l'autre |
+| `enregistrer.py` | Poste de sécurité : enregistrer, lister, supprimer une personne |
+| `lancer-vision-mac.sh` | Lance la vision sur le Mac (réseau Sentinel) |
 | `anomalies.py` | Isolation Forest sur fenêtre glissante, score de risque 0-100 expliqué, aucun seuil statique |
 | `simulateur.py` | Faux ESP8266 : mesures normales puis scénario `surchauffe`, `fuite` ou `pic` |
 | `outils/fausse_api.py` | Fausse API qui affiche les alertes, en attendant celle des devs |
+| `outils/telecharger_modeles.py` | Télécharge les modèles de visage YuNet et SFace (empreintes SHA-256 vérifiées) |
 | `home-assistant/` | Automatisations (buzzer/LED), carte de dashboard, extrait de `configuration.yaml` |
 | `.env.example` | Modèle de configuration (copie-le en `.env`, jamais commité) |
 
-## Lancer dans Docker (le mode de la démo)
+## Le mode de la démo : tout sur le PC de la Région
 
-Les deux IA sont des services du `docker-compose.yml` racine, construits depuis `ia/Dockerfile` (une image commune, PyTorch CPU, YOLOv8n intégré, utilisateur non-root) :
+Le PC Serveur Local est le PC de la Région (HP ProBook x360 11 G5 EE : Celeron N4120, 4 cœurs à 1,1 GHz, 4 Go, Ubuntu).
+Tout tourne dans Docker, et chaque IA a son propre client MQTT (compte `ia`) : rien ne passe par Home Assistant.
 
 ```bash
-docker compose up -d --build ia-vision ia-anomalies
+docker compose up -d --build            # .env racine : mots de passe MQTT, CAMERA_DEVICE, TAILLE_YOLO, IPS_MAX
 docker compose logs -f ia-vision ia-anomalies
 ```
 
-- `ia-vision` lit `rtsp://go2rtc:8554/<CAMERA_STREAM>` (`camera_usb` sur Ubuntu) et sert le flux annoté sur http://<serveur>:8090/flux.
-- `ia-anomalies` apprend sur `IA_APPRENTISSAGE` mesures (1 200 par défaut, soit 20 min), puis surveille.
-- Le modèle appris et les captures d'intrusion sont dans le volume `ia_donnees` : ils survivent aux redémarrages. Pour réapprendre : `docker compose run --rm ia-anomalies python anomalies.py --reset`.
-- `API_ALERTES` (`.env` racine) : l'adresse de l'API des devs, vide tant qu'elle n'existe pas (les alertes sont alors journalisées).
+**Optimisations pour le Celeron** (mesures dans `docs/decision-serveur.md` : de 512 ms à **77 ms** par image) :
 
-> **Pourquoi la vision peut être dans Docker :** la webcam USB est branchée sur le serveur et publiée par go2rtc sur le réseau. Le conteneur n'a donc pas besoin d'accéder au périphérique USB, seulement au flux RTSP. YOLO y tourne sur le CPU seul : vérifie `sensor.sentinel_ia_inference_ms` (objectif < 100 ms).
+| Réglage | Pourquoi |
+|---|---|
+| L'IA ouvre la webcam elle-même, en **MJPEG 640×480** (`CAMERA_DEVICE`) | la webcam compresse ses images elle-même ; avant, go2rtc réencodait la vidéo en H.264 puis l'IA la décodait : deux gros calculs inutiles |
+| go2rtc **relaie le flux annoté** de l'IA (`camera_usb` = `http://ia-vision:8090/flux`) | le dashboard garde sa vidéo, sans réencodage |
+| **YOLOv8n exporté en OpenVINO** (`yolov8n_320_openvino_model`) | le moteur d'Intel est optimisé pour ses processeurs |
+| **Taille d'analyse 320 px** (`TAILLE_YOLO`, 416 en réserve) | 4 fois moins de pixels qu'à 640 px |
+| **5 analyses par seconde au maximum** (`IPS_MAX`) | suffisant pour repérer quelqu'un, et laisse du CPU à Mosquitto et HA |
+| **Dernière image seulement** | l'IA ne prend jamais de retard sur le direct |
+| **Visage cherché dans le haut du corps**, seulement pour les personnes pas encore identifiées | bien moins de pixels à fouiller |
+
+- `ia-anomalies` apprend sur `IA_APPRENTISSAGE` mesures (600 par défaut : 20 min à une mesure toutes les 2 s, voir `docs/contrat-capteurs.md`), puis surveille. Pour réapprendre : `docker compose run --rm ia-anomalies python anomalies.py --reset`.
+- La vidéo du dashboard dépend de `ia-vision` : si l'IA vision est arrêtée, `camera_usb` est vide.
+- Plan B, sur le Mac : `docker compose -f docker-compose.yml -f docker-compose.mac.yml up -d`, puis `ia/lancer-vision-mac.sh --camera 1`.
+
+> **Pourquoi la vision lisait avec des minutes de retard (« saturation ») :** la caméra envoie 30 images par seconde ; si l'analyse est plus lente, les images non lues s'empilent dans le tampon et l'IA analyse le passé, de plus en plus loin. `vision.py` lit maintenant le flux dans un fil à part qui **ne garde que la dernière image** : l'IA saute les images qu'elle n'a pas le temps de traiter, mais travaille toujours sur le présent. Le port 8090 sert aussi de verrou : une 2e instance refuse de démarrer.
+
+## Contrôle d'accès : la bibliothèque de personnes
+
+Scénario : comme sur un campus d'entreprise, toute personne doit être enregistrée au poste de sécurité.
+
+| Situation | Cadre | Ce qui se passe |
+|---|---|---|
+| Visage reconnu dans la bibliothèque | **vert** + nom | rien, la personne est simplement détectée |
+| En cours d'identification | orange | on attend de voir le visage |
+| Visage vu 3 fois sans correspondance, ou aucun visage montré pendant 8 s | **rouge** « INCONNU » | annonce vocale « Inconnu, identifiez-vous », alerte `POST /api/v1/alerts` (`personne_inconnue`), capture horodatée, message MQTT `sentinel/ia/vision/annonce` |
+
+Une personne reconnue garde son identité tant qu'elle reste dans le champ, même si elle tourne la tête.
+
+```bash
+python enregistrer.py --nom "Louis Gardet"                 # seul face à la caméra : 5 prises de vue
+python enregistrer.py --nom "Louis Gardet" --photo moi.jpg # ou depuis une photo
+python enregistrer.py --liste
+python enregistrer.py --supprimer "Louis Gardet"           # droit à l'effacement
+```
+
+Pas besoin de redémarrer `vision.py` : il relit la bibliothèque toutes les 5 s.
+
+**Comment ça marche :** YOLOv8n trouve les personnes ; YuNet (OpenCV) trouve leur visage ; SFace (OpenCV) transforme chaque visage en une « signature » de 128 nombres. Deux signatures de la même personne pointent dans la même direction : on compare leur similarité cosinus au seuil 0,363 recommandé par les auteurs de SFace. Coût mesuré : environ 7 ms par visage sur le Mac.
+
+**RGPD, à dire au jury :** un visage est une donnée biométrique (article 9 du RGPD), interdite par défaut. Dans une vraie entreprise, il faut une base légale, une analyse d'impact (AIPD) et une information des personnes. Ici : enregistrement uniquement **volontaire**, on stocke une **signature et une photo d'identification**, jamais de vidéo ; le dossier `personnes/` est exclu de Git ; `--supprimer` efface tout pour une personne.
 
 ## Lancer en 5 minutes (sur ton PC, sans le boîtier)
 

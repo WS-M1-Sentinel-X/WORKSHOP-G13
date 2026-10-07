@@ -4,3 +4,7 @@ modele_anomalies.joblib
 *.pt
 __pycache__/
 .venv/
+# Données biométriques (RGPD) : jamais dans Git
+personnes/
+# Modèles de visage téléchargés (outils/telecharger_modeles.py)
+modeles/

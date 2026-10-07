@@ -1,0 +1,27 @@
+# Plan B : faire tourner la stack sur le Mac de Louis (Docker Desktop, macOS).
+#   docker compose -f docker-compose.yml -f docker-compose.mac.yml up -d
+#
+# Ce qui change par rapport au PC Ubuntu de test :
+# - Docker Desktop ne donne pas accès aux caméras USB : la webcam est lue directement par
+#   ia/vision.py, lancé sur le Mac hors Docker (ia/lancer-vision-mac.sh) ;
+# - go2rtc relaie donc le flux annoté de l'IA (http://<mac>:8090/flux) au lieu de /dev/video2 ;
+# - WireGuard a besoin des modules du noyau Linux : désactivé sur le Mac (profil "vpn").
+
+services:
+  go2rtc:
+    devices: !reset []
+    volumes: !override
+      - ./go2rtc/go2rtc.mac.yaml:/config/go2rtc.yaml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  wireguard:
+    profiles: ["vpn"]
+
+  # Sur le Mac, la vision tourne hors Docker (ia/lancer-vision-mac.sh).
+  ia-vision:
+    profiles: ["linux"]
+
+  homeassistant:
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # flux de l'IA vision : http://host.docker.internal:8090/flux

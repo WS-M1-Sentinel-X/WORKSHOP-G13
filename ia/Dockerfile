@@ -15,9 +15,16 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Le modèle YOLOv8n est intégré à l'image : pas de téléchargement le jour de la démo.
-RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
+# Puis exporté en OpenVINO (moteur d'Intel) en 416 et 320 px : bien plus rapide sur le Celeron.
+RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')" \
+    && for t in 416 320; do \
+         python -c "from ultralytics import YOLO; YOLO('yolov8n.pt').export(format='openvino', imgsz=$t, half=False)" \
+         && mv yolov8n_openvino_model yolov8n_${t}_openvino_model; \
+       done
 
 COPY . .
+# Modèles de visage OpenCV (YuNet + SFace), vérifiés par empreinte SHA-256.
+RUN python outils/telecharger_modeles.py
 
 # Conteneur non-root (architecture v2) ; /donnees reçoit le modèle appris et les captures.
 RUN useradd --create-home --uid 1000 ia \

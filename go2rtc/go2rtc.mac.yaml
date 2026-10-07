@@ -1,0 +1,14 @@
+# go2rtc sur le Mac de démo : la webcam est ouverte par ia/vision.py (hors Docker),
+# go2rtc relaie le flux annoté par l'IA pour le dashboard (RTSP, WebRTC).
+api:
+  listen: ":1984"
+
+rtsp:
+  listen: ":8554"
+
+webrtc:
+  listen: ":8555"
+
+streams:
+  camera_ia:
+    - http://host.docker.internal:8090/flux

@@ -88,8 +88,8 @@ rtsp://go2rtc:8554/camera_usb
 
 ## IA (vision + anomalies)
 
-Le dossier `ia/` contient les deux IA, lancées comme services Docker (`ia-vision`, `ia-anomalies`) :
-`vision.py` (YOLOv8n sur le flux webcam relayé par go2rtc, flux annoté sur le port 8090) et `anomalies.py` (Isolation Forest sur les mesures MQTT).
+Le dossier `ia/` contient les deux IA, chacune avec son propre client MQTT (compte `ia`) :
+`vision.py` (YOLOv8n en OpenVINO + reconnaissance des personnes enregistrées, service `ia-vision`, qui ouvre la webcam) et `anomalies.py` (Isolation Forest sur les mesures MQTT, service `ia-anomalies`).
 Elles publient sur le broker Mosquitto dedie (entites creees automatiquement dans Home Assistant) et envoient leurs alertes en `POST /api/v1/alerts`.
 Mode d'emploi complet : [ia/README.md](ia/README.md).
 

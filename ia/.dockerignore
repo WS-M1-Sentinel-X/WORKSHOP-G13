@@ -5,3 +5,5 @@ __pycache__/
 captures/
 modele_anomalies.joblib
 *.pt
+personnes/
+modeles/

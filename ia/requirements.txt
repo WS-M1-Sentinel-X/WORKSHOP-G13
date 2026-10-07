@@ -4,3 +4,4 @@ scikit-learn
 joblib
 ultralytics        # YOLOv8 (installe aussi torch et opencv)
 opencv-python
+openvino           # accélère YOLO sur les processeurs Intel (Celeron du serveur)
