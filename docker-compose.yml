@@ -66,8 +66,8 @@ services:
     image: alexxit/go2rtc:latest
     container_name: sentinel-go2rtc
     restart: unless-stopped
-    # La webcam est ouverte par ia-vision (une webcam USB ne s'ouvre qu'une fois sous Linux) :
-    # go2rtc relaie son flux annoté, sans réencodage H.264 (trop coûteux pour le Celeron).
+    devices: 
+      - "/dev/video1:/dev/video1"
     volumes:
       - ./go2rtc:/config
     ports:
