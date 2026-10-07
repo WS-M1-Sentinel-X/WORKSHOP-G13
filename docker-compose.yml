@@ -98,25 +98,21 @@ services:
       - sentinel-net
 
   # IA vision : YOLOv8n sur le flux webcam relayé par go2rtc, flux annoté MJPEG sur :8090
-  # IA vision : lit la webcam USB en direct (MJPEG), YOLOv8n en OpenVINO, contrôle d'accès par visage.
-  # Réglages pour le Celeron N4120 dans .env : TAILLE_YOLO (416 ou 320), IPS_MAX (analyses/s).
+  # IA vision : lit le flux de go2rtc (RTSP), YOLOv8n en OpenVINO, contrôle d'accès par visage.
+  # Réglages pour le Celeron N4120 dans .env : MODELE_YOLO + TAILLE_YOLO, IPS_MAX (analyses/s).
   ia-vision:
     build: ./ia
     image: sentinel-ia
     container_name: sentinel-ia-vision
     restart: unless-stopped
     command: ["python", "vision.py", "--sans-fenetre"]
-    devices:
-      - ${CAMERA_DEVICE:-/dev/video0}:/dev/video0
-    group_add:
-      - video # accès à la webcam pour l'utilisateur non-root du conteneur
     environment:
       - MQTT_HOTE=mqtt
       - MQTT_PORT=1883
       - MQTT_UTILISATEUR=ia
       - MQTT_MOT_DE_PASSE=${MQTT_BROKER_PASSWORD_IA:?Definis MQTT_BROKER_PASSWORD_IA dans .env}
-      - SOURCE_VIDEO=/dev/video0
-      - MODELE_YOLO=yolov8n_${TAILLE_YOLO:-320}_openvino_model
+      - SOURCE_VIDEO=rtsp://go2rtc:8554/camera_usb
+      - MODELE_YOLO=${MODELE_YOLO:-yolov8n_320_int8_openvino_model}
       - TAILLE_YOLO=${TAILLE_YOLO:-320}
       - IPS_MAX=${IPS_MAX:-5}
       - API_ALERTES=${API_ALERTES:-}
@@ -127,6 +123,7 @@ services:
       - "8090:8090"
     depends_on:
       - mqtt
+      - go2rtc
     networks:
       - sentinel-net
 

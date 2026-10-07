@@ -47,24 +47,22 @@ Le PC Serveur Local est le PC de la Région (HP ProBook x360 11 G5 EE : Celeron 
 Tout tourne dans Docker, et chaque IA a son propre client MQTT (compte `ia`) : rien ne passe par Home Assistant.
 
 ```bash
-docker compose up -d --build            # .env racine : mots de passe MQTT, CAMERA_DEVICE, TAILLE_YOLO, IPS_MAX
+docker compose up -d --build            # .env racine : mots de passe MQTT, TAILLE_YOLO, IPS_MAX
 docker compose logs -f ia-vision ia-anomalies
 ```
 
-**Optimisations pour le Celeron** (mesures dans `docs/decision-serveur.md` : de 512 ms à **77 ms** par image) :
+**Optimisations pour le Celeron** (mesures dans `docs/decision-serveur.md` : de 512 ms à **59 ms** par image) :
 
 | Réglage | Pourquoi |
 |---|---|
-| L'IA ouvre la webcam elle-même, en **MJPEG 640×480** (`CAMERA_DEVICE`) | la webcam compresse ses images elle-même ; avant, go2rtc réencodait la vidéo en H.264 puis l'IA la décodait : deux gros calculs inutiles |
-| go2rtc **relaie le flux annoté** de l'IA (`camera_usb` = `http://ia-vision:8090/flux`) | le dashboard garde sa vidéo, sans réencodage |
-| **YOLOv8n exporté en OpenVINO** (`yolov8n_320_openvino_model`) | le moteur d'Intel est optimisé pour ses processeurs |
+| go2rtc capture la webcam (`ffmpeg:/dev/video1#video=h264`, réglage de l'équipe, fixe) ; l'IA lit `rtsp://go2rtc:8554/camera_usb` | une seule capture de la webcam, partagée par l'IA et le dashboard |
+| **YOLOv8n exporté en OpenVINO et quantifié INT8** (`yolov8n_320_int8_openvino_model`) | le moteur d'Intel est optimisé pour ses processeurs |
 | **Taille d'analyse 320 px** (`TAILLE_YOLO`, 416 en réserve) | 4 fois moins de pixels qu'à 640 px |
 | **5 analyses par seconde au maximum** (`IPS_MAX`) | suffisant pour repérer quelqu'un, et laisse du CPU à Mosquitto et HA |
 | **Dernière image seulement** | l'IA ne prend jamais de retard sur le direct |
 | **Visage cherché dans le haut du corps**, seulement pour les personnes pas encore identifiées | bien moins de pixels à fouiller |
 
 - `ia-anomalies` apprend sur `IA_APPRENTISSAGE` mesures (600 par défaut : 20 min à une mesure toutes les 2 s, voir `docs/contrat-capteurs.md`), puis surveille. Pour réapprendre : `docker compose run --rm ia-anomalies python anomalies.py --reset`.
-- La vidéo du dashboard dépend de `ia-vision` : si l'IA vision est arrêtée, `camera_usb` est vide.
 - Plan B, sur le Mac : `docker compose -f docker-compose.yml -f docker-compose.mac.yml up -d`, puis `ia/lancer-vision-mac.sh --camera 1`.
 
 > **Pourquoi la vision lisait avec des minutes de retard (« saturation ») :** la caméra envoie 30 images par seconde ; si l'analyse est plus lente, les images non lues s'empilent dans le tampon et l'IA analyse le passé, de plus en plus loin. `vision.py` lit maintenant le flux dans un fil à part qui **ne garde que la dernière image** : l'IA saute les images qu'elle n'a pas le temps de traiter, mais travaille toujours sur le présent. Le port 8090 sert aussi de verrou : une 2e instance refuse de démarrer.

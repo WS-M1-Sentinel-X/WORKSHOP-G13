@@ -15,12 +15,16 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Le modèle YOLOv8n est intégré à l'image : pas de téléchargement le jour de la démo.
-# Puis exporté en OpenVINO (moteur d'Intel) en 416 et 320 px : bien plus rapide sur le Celeron.
-RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')" \
-    && for t in 416 320; do \
-         python -c "from ultralytics import YOLO; YOLO('yolov8n.pt').export(format='openvino', imgsz=$t, half=False)" \
-         && mv yolov8n_openvino_model yolov8n_${t}_openvino_model; \
-       done
+# Puis exporté en OpenVINO (moteur d'Intel), bien plus rapide sur le Celeron :
+# - 320 px quantifié INT8 (calcul en entiers, calibré sur 8 images COCO) : le modèle de la démo ;
+# - 416 px en flottant : en réserve, détecte mieux les personnes lointaines mais plus lent.
+RUN pip install --no-cache-dir nncf \
+    && python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')" \
+    && python -c "from ultralytics import YOLO; YOLO('yolov8n.pt').export(format='openvino', imgsz=320, int8=True, data='coco8.yaml')" \
+    && mv yolov8n_int8_openvino_model yolov8n_320_int8_openvino_model \
+    && python -c "from ultralytics import YOLO; YOLO('yolov8n.pt').export(format='openvino', imgsz=416)" \
+    && mv yolov8n_openvino_model yolov8n_416_openvino_model \
+    && rm -rf datasets
 
 COPY . .
 # Modèles de visage OpenCV (YuNet + SFace), vérifiés par empreinte SHA-256.

@@ -68,7 +68,12 @@ def ouvrir(source):
 
 
 class LecteurDirect:
-    """Lit le flux en continu dans un fil à part et ne garde que l'image la plus récente."""
+    """Lit le flux en continu dans un fil à part et ne garde que l'image la plus récente.
+
+    Le flux doit être lu en entier (sinon il prend du retard), mais seule l'image demandée par
+    l'IA est convertie en image exploitable (retrieve) : à 5 analyses/s sur un flux à 30 images/s,
+    on évite 25 conversions de couleur inutiles par seconde.
+    """
 
     def __init__(self, source):
         self.source = source
@@ -77,14 +82,14 @@ class LecteurDirect:
             raise SystemExit(f"Source vidéo introuvable : {source}")
         self.image = None
         self.numero = 0
-        self.verrou = threading.Lock()
+        self.demande = threading.Event()
+        self.prete = threading.Event()
         threading.Thread(target=self._lire, daemon=True).start()
 
     def _lire(self):
         echecs = 0
         while True:
-            ok, image = self.camera.read()
-            if not ok:
+            if not self.camera.grab():
                 echecs += 1
                 time.sleep(0.1)
                 if echecs >= 50:  # flux muet depuis ~5 s : on se reconnecte
@@ -94,16 +99,19 @@ class LecteurDirect:
                     echecs = 0
                 continue
             echecs = 0
-            with self.verrou:
-                self.image, self.numero = image, self.numero + 1
+            if self.demande.is_set():
+                ok, image = self.camera.retrieve()
+                if ok:
+                    self.image, self.numero = image, self.numero + 1
+                    self.demande.clear()
+                    self.prete.set()
 
     def lire(self, dernier_numero):
-        """Attend une image plus récente que dernier_numero ; renvoie (numéro, image)."""
-        while True:
-            with self.verrou:
-                if self.numero != dernier_numero and self.image is not None:
-                    return self.numero, self.image
-            time.sleep(0.005)
+        """Demande l'image suivante du flux et l'attend ; renvoie (numéro, image)."""
+        self.prete.clear()
+        self.demande.set()
+        self.prete.wait()
+        return self.numero, self.image
 
 
 class LecteurFichier:
