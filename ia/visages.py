@@ -116,6 +116,16 @@ class Visages:
         return meilleur_nom, meilleure
 
 
+def sauvegarder_personne(nom, signatures, photo):
+    """Ajoute (ou remplace) une personne dans la bibliothèque : signatures + nom + photo d'identification."""
+    BIBLIOTHEQUE.mkdir(parents=True, exist_ok=True)
+    base = nom_fichier(nom)
+    np.save(BIBLIOTHEQUE / f"{base}.npy", np.vstack(signatures).astype(np.float32))
+    (BIBLIOTHEQUE / f"{base}.nom").write_text(nom, encoding="utf-8")
+    cv2.imwrite(str(BIBLIOTHEQUE / f"{base}.jpg"), photo)
+    log.info("%s enregistré(e) avec %d signature(s) dans %s", nom, len(signatures), BIBLIOTHEQUE)
+
+
 def iou(a, b):
     """Recouvrement de deux boîtes (x1, y1, x2, y2), de 0 (disjointes) à 1 (identiques)."""
     x1, y1 = max(a[0], b[0]), max(a[1], b[1])

@@ -88,6 +88,12 @@ python enregistrer.py --supprimer "Louis Gardet"           # droit à l'effaceme
 
 Pas besoin de redémarrer `vision.py` : il relit la bibliothèque toutes les 5 s.
 
+**Depuis Home Assistant (poste de sécurité)** : l'appareil « Sentinel-X IA » propose un champ **Nom à enregistrer**,
+un bouton **Enregistrer la personne devant la caméra** et un capteur **Enregistrement** qui suit la progression
+(« en cours 3/5 », « enregistré(e) », ou la raison d'un échec). L'IA prend les 5 photos sur les images qu'elle analyse
+déjà : la caméra n'est jamais ouverte une deuxième fois. Seul le compte MQTT `homeassistant` peut écrire sur
+`sentinel/ia/vision/enregistrement/nom/set` et `.../lancer` (ACL).
+
 **Comment ça marche :** YOLOv8n trouve les personnes ; YuNet (OpenCV) trouve leur visage ; SFace (OpenCV) transforme chaque visage en une « signature » de 128 nombres. Deux signatures de la même personne pointent dans la même direction : on compare leur similarité cosinus au seuil 0,363 recommandé par les auteurs de SFace. Coût mesuré : environ 7 ms par visage sur le Mac.
 
 **RGPD, à dire au jury :** un visage est une donnée biométrique (article 9 du RGPD), interdite par défaut. Dans une vraie entreprise, il faut une base légale, une analyse d'impact (AIPD) et une information des personnes. Ici : enregistrement uniquement **volontaire**, on stocke une **signature et une photo d'identification**, jamais de vidéo ; le dossier `personnes/` est exclu de Git ; `--supprimer` efface tout pour une personne.

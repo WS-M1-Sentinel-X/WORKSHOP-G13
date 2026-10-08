@@ -14,10 +14,9 @@ import logging
 import time
 
 import cv2
-import numpy as np
 
 from commun import charger_config
-from visages import BIBLIOTHEQUE, Visages, nom_fichier
+from visages import BIBLIOTHEQUE, Visages, nom_fichier, sauvegarder_personne
 
 log = logging.getLogger("sentinel-ia")
 
@@ -106,11 +105,7 @@ def main():
         source = args.source if args.source is not None else (cfg["source_video"] or args.camera)
         signatures, photo = depuis_camera(visages, source, args.prises)
 
-    base = nom_fichier(args.nom)
-    np.save(BIBLIOTHEQUE / f"{base}.npy", np.vstack(signatures).astype(np.float32))
-    (BIBLIOTHEQUE / f"{base}.nom").write_text(args.nom, encoding="utf-8")
-    cv2.imwrite(str(BIBLIOTHEQUE / f"{base}.jpg"), photo)
-    log.info("%s enregistré(e) avec %d signature(s) dans %s", args.nom, len(signatures), BIBLIOTHEQUE)
+    sauvegarder_personne(args.nom, signatures, photo)
 
 
 if __name__ == "__main__":

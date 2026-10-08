@@ -12,6 +12,9 @@ topic write sentinel/#
 topic write homeassistant/+/sentinel_ia/#
 
 user homeassistant
+# Poste de sécurité : champ « Nom » et bouton « Enregistrer » de l'IA vision
+topic write sentinel/ia/vision/enregistrement/nom/set
+topic write sentinel/ia/vision/enregistrement/lancer
 topic read station/#
 topic read sentinel/#
 topic read homeassistant/#

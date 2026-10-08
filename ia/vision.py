@@ -34,12 +34,20 @@ import cv2
 from ultralytics import YOLO
 
 from commun import DONNEES, DOSSIER, charger_config, creer_client_mqtt, declarer_entite, envoyer_alerte
-from visages import Suivi, Visages
+from visages import Suivi, Visages, sauvegarder_personne
 
 NOM = "vision"
 TOPIC_ETAT = "sentinel/ia/vision/etat"
 TOPIC_IMAGE = "sentinel/ia/vision/capture"
 TOPIC_ANNONCE = "sentinel/ia/vision/annonce"
+# Poste de sécurité dans Home Assistant : champ « Nom » + bouton « Enregistrer ».
+TOPIC_NOM = "sentinel/ia/vision/enregistrement/nom"
+TOPIC_NOM_SET = "sentinel/ia/vision/enregistrement/nom/set"
+TOPIC_LANCER = "sentinel/ia/vision/enregistrement/lancer"
+TOPIC_ENREGISTREMENT = "sentinel/ia/vision/enregistrement/etat"
+PRISES_ENREGISTREMENT, DUREE_MAX_ENREGISTREMENT = 5, 30.0
+# Le firmware publie le PIR à part : "ON" / "OFF" (en plus du champ "mouvement" prévu par le contrat).
+TOPIC_MOUVEMENT = os.getenv("TOPIC_MOUVEMENT", "station/station1/mouvement")
 LARGEUR, HAUTEUR = 640, 480
 # Modèle optimisé pour le Celeron (OpenVINO INT8, 320 px), intégré à l'image Docker : utilisé par défaut
 # s'il est présent, pour que la vitesse ne dépende pas d'un réglage oublié dans le docker-compose.
@@ -263,6 +271,69 @@ def declarer_entites_ha(client, cfg):
     declarer_entite(client, cfg, NOM, "camera", "derniere_intrusion", {
         "name": "Dernier inconnu", "topic": TOPIC_IMAGE,
     })
+    declarer_entite(client, cfg, NOM, "text", "nom_a_enregistrer", {
+        "name": "Nom à enregistrer", "icon": "mdi:account-plus",
+        "command_topic": TOPIC_NOM_SET, "state_topic": TOPIC_NOM, "min": 0, "max": 40,
+    })
+    declarer_entite(client, cfg, NOM, "button", "enregistrer", {
+        "name": "Enregistrer la personne devant la caméra", "icon": "mdi:camera-account",
+        "command_topic": TOPIC_LANCER, "payload_press": "LANCER",
+    })
+    declarer_entite(client, cfg, NOM, "sensor", "enregistrement", {
+        "name": "Enregistrement", "icon": "mdi:badge-account-horizontal", "state_topic": TOPIC_ENREGISTREMENT,
+    })
+
+
+class Enregistrement:
+    """Enregistrement d'une personne lancé depuis Home Assistant, sur les images que l'IA analyse déjà
+    (la caméra n'est jamais ouverte une deuxième fois)."""
+
+    def __init__(self, client):
+        self.client = client
+        self.nom = ""
+        self.en_cours = False
+        self.signatures, self.photo, self.fin, self.derniere_prise = [], None, 0.0, 0.0
+
+    def etat(self, texte):
+        self.client.publish(TOPIC_ENREGISTREMENT, texte, retain=True)
+        log.info("Enregistrement : %s", texte)
+
+    def definir_nom(self, texte):
+        self.nom = " ".join(texte.split())[:40]
+        self.client.publish(TOPIC_NOM, self.nom, retain=True)
+
+    def lancer(self):
+        if self.en_cours:
+            return
+        if len(self.nom) < 2:
+            self.etat("échec : saisis d'abord le nom")
+            return
+        self.en_cours, self.signatures, self.photo = True, [], None
+        self.fin = time.monotonic() + DUREE_MAX_ENREGISTREMENT
+        self.etat(f"en cours pour {self.nom} : 0/{PRISES_ENREGISTREMENT}, seul face à la caméra")
+
+    def traiter(self, image, visages):
+        """Appelé à chaque image analysée ; renvoie True quand une personne vient d'être enregistrée."""
+        if not self.en_cours:
+            return False
+        maintenant = time.monotonic()
+        if maintenant > self.fin:
+            self.en_cours = False
+            self.etat(f"échec pour {self.nom} : visage pas assez visible en {DUREE_MAX_ENREGISTREMENT:.0f} s")
+            return False
+        trouves = visages.detecter(image)
+        if len(trouves) != 1 or maintenant - self.derniere_prise < 0.6:
+            return False  # une seule personne devant la caméra, et des prises espacées
+        self.signatures.append(visages.signature(image, trouves[0]))
+        self.photo, self.derniere_prise = image.copy(), maintenant
+        if len(self.signatures) < PRISES_ENREGISTREMENT:
+            self.etat(f"en cours pour {self.nom} : {len(self.signatures)}/{PRISES_ENREGISTREMENT}, bouge un peu la tête")
+            return False
+        sauvegarder_personne(self.nom, self.signatures, self.photo)
+        self.en_cours = False
+        self.etat(f"{self.nom} enregistré(e)")
+        self.definir_nom("")
+        return True
 
 
 def main():
@@ -317,9 +388,22 @@ def main():
 
     def a_la_connexion(client):
         declarer_entites_ha(client, cfg)
-        client.subscribe(cfg["topic_capteurs"])
+        client.subscribe([(cfg["topic_capteurs"], 0), (TOPIC_MOUVEMENT, 0), (TOPIC_NOM_SET, 0), (TOPIC_LANCER, 0)])
+        enregistrement.definir_nom(enregistrement.nom)
+        if not enregistrement.en_cours:
+            enregistrement.etat("prêt")
 
     def a_la_reception(client, userdata, message):
+        if message.topic == TOPIC_NOM_SET:
+            enregistrement.definir_nom(message.payload.decode("utf-8", "ignore"))
+            return
+        if message.topic == TOPIC_LANCER:
+            enregistrement.lancer()
+            return
+        if message.topic == TOPIC_MOUVEMENT:
+            if message.payload.strip().upper() in (b"ON", b"1", b"TRUE"):
+                dernier_pir["t"] = time.monotonic()
+            return
         try:
             if json.loads(message.payload).get("mouvement"):
                 dernier_pir["t"] = time.monotonic()
@@ -327,6 +411,7 @@ def main():
             pass
 
     client = creer_client_mqtt(cfg, NOM)
+    enregistrement = Enregistrement(client)
     client.user_data_set({"a_la_connexion": a_la_connexion})
     client.on_message = a_la_reception
     client.loop_start()
@@ -352,6 +437,8 @@ def main():
             inference_ms = round((time.perf_counter() - debut) * 1000, 1)
 
             pistes = suivi.mettre_a_jour([b.tolist() for b in resultat.boxes.xyxy])
+            if enregistrement.traiter(image, visages):
+                visages.prochaine_verification = 0.0  # la nouvelle personne est reconnue tout de suite
             visages.recharger_si_modifiee()
             # On ne cherche le visage que des personnes pas encore identifiées : économie de CPU.
             a_identifier = [p for p in pistes if not p["nom"]]

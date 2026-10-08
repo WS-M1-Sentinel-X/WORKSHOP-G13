@@ -55,10 +55,31 @@ docker compose exec ia-vision python enregistrer.py --nom "Louis Gardet" --sourc
 5 prises de vue en 8 s, puis reconnaissance **2 secondes après** l'enregistrement, avec une similarité de **0,84**
 (seuil 0,363), sans redémarrer l'IA. Journaux : `captures/03-journal-enregistrement.txt`, `captures/04-journal-ia-vision-et-ressources.txt`.
 
+**Enregistrement de Joris Martins (14h30)** : 5 prises en 9 s, reconnu **3 secondes après**, similarité **0,85**,
+y compris tête tournée. Captures `05-joris-avant.jpg` / `07-joris-apres.jpg`, journal `06-journal-enregistrement-joris.txt`.
+Bibliothèque : 2 personnes (Joris Martins, Louis Gardet).
+
 **Réglages optimisés par défaut (12h31)** : le `docker-compose.yml` du serveur a été remplacé pendant la journée et les
 réglages du modèle avaient disparu ; un conteneur recréé serait reparti sur PyTorch 640 px (~500 ms). `vision.py` choisit
 désormais tout seul le modèle INT8 320 px s'il est présent dans l'image. Contrôle après reconstruction : **55 ms**
 (p90 57 ms), Louis toujours reconnu, bibliothèque conservée dans le volume `ia_donnees`.
+
+**Durcissement de l'équipe poussé sur GitHub (14h16)** : les 3 commits de Tassily (services et réseau durcis, ACL de
+l'ESP restreintes, abonnement au buzzer) étaient bloqués sur le serveur, faute d'identifiants GitHub. Vérifiés sans
+secret, puis poussés depuis le poste de Louis (`fed9028..0032adf`, auteur conservé : Tassily). Retour arrière possible :
+branche `sauvegarde/avant-push-20261008-1216` et archive `~/sauvegarde-avant-push-20261008-1216.tgz` sur le serveur.
+
+**Bouton d'enregistrement dans Home Assistant (14h37)** : champ « Nom à enregistrer », bouton « Enregistrer la personne
+devant la caméra » et capteur « Enregistrement », créés automatiquement par MQTT Discovery. Testé avant déploiement :
+bouton sans nom refusé, puis 5 prises, enregistrement et reconnaissance (similarité 0,96). ACL Mosquitto : le compte
+`homeassistant` peut écrire uniquement sur les 2 topics d'enregistrement. Sauvegardes : branche
+`sauvegarde/avant-bouton-20261008-1436` et dossier `~/sauvegarde-avant-bouton-20261008-1436/` (code + ACL) sur le serveur.
+
+**Bouton utilisé en conditions réelles (14h40)** : Tasilimy Kaba enregistré depuis Home Assistant. Bibliothèque : 3 personnes.
+
+**Double confirmation PIR + caméra rétablie (14h54)** : le firmware publie le mouvement à part (`station/station1/mouvement`,
+« ON »/« OFF »). L'IA vision écoute désormais ce topic : un inconnu vu par la caméra pendant que le PIR détecte un
+mouvement donne une alerte **critique** (« mouvement confirmé par le PIR ») au lieu de « haute ». Testé avant déploiement.
 
 ## Note RGPD
 

@@ -30,7 +30,7 @@ Règles :
 - **Noms de champs exacts, en minuscules, sans accent.** Un autre nom (`temp`, `humidity`) et l'IA ignore le message.
 - **Jamais de `null`, `NaN` ni de chaîne vide** : si le DHT22 rate une lecture, on **n'envoie pas** le message plutôt que d'envoyer un trou.
 - **`gaz` en valeur brute** (0-1023), pas en volts ni en ppm : l'Isolation Forest apprend la normalité de la salle, l'unité n'a pas d'importance tant qu'elle ne change pas.
-- **`mouvement` reflète l'état du PIR au moment de la mesure** ; si possible, publier aussi un message immédiat quand il passe à 1 (sans attendre les 2 s).
+- **`mouvement`** : le firmware actuel publie le PIR à part, sur `station/station1/mouvement` (`ON` / `OFF`) ; l'IA vision écoute ce topic (et lit aussi le champ `mouvement` s'il est présent dans `capteurs`).
 
 ## Les commandes (sens inverse)
 
