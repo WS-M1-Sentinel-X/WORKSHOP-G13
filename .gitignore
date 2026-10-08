@@ -15,3 +15,5 @@ wireguard/config/
 *.user
 Thumbs.db
 Desktop.ini
+# Captures pour le dossier : elles montrent des visages (RGPD), jamais dans Git
+docs/captures/

@@ -33,7 +33,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import cv2
 from ultralytics import YOLO
 
-from commun import DONNEES, charger_config, creer_client_mqtt, declarer_entite, envoyer_alerte
+from commun import DONNEES, DOSSIER, charger_config, creer_client_mqtt, declarer_entite, envoyer_alerte
 from visages import Suivi, Visages
 
 NOM = "vision"
@@ -41,6 +41,9 @@ TOPIC_ETAT = "sentinel/ia/vision/etat"
 TOPIC_IMAGE = "sentinel/ia/vision/capture"
 TOPIC_ANNONCE = "sentinel/ia/vision/annonce"
 LARGEUR, HAUTEUR = 640, 480
+# Modèle optimisé pour le Celeron (OpenVINO INT8, 320 px), intégré à l'image Docker : utilisé par défaut
+# s'il est présent, pour que la vitesse ne dépende pas d'un réglage oublié dans le docker-compose.
+MODELE_OPTIMISE, TAILLE_OPTIMISEE = "yolov8n_320_int8_openvino_model", 320
 ANNONCE = "Inconnu, identifiez-vous."
 DELAI_SANS_VISAGE = 8.0  # s : une personne qui ne montre jamais son visage devient « inconnue »
 VISAGES_INCONNUS_AVANT_ALERTE = 3  # visage vu mais pas reconnu sur 3 analyses d'affilée
@@ -285,8 +288,10 @@ def main():
     source = args.source if args.source is not None else cfg["source_video"]
     if source.isdigit():
         source = int(source)
-    modele_yolo = args.modele or os.getenv("MODELE_YOLO") or "yolov8n.pt"
-    taille = args.taille or int(os.getenv("TAILLE_YOLO") or LARGEUR)
+    optimise_present = (DOSSIER / MODELE_OPTIMISE).is_dir()
+    modele_yolo = (args.modele or os.getenv("MODELE_YOLO")
+                   or (str(DOSSIER / MODELE_OPTIMISE) if optimise_present else "yolov8n.pt"))
+    taille = args.taille or int(os.getenv("TAILLE_YOLO") or (TAILLE_OPTIMISEE if optimise_present else LARGEUR))
     pause_min = 1 / (args.ips or float(os.getenv("IPS_MAX") or 5))
     # Un flux réseau, une webcam (/dev/video*, index) : temps réel. Un fichier : toutes les images.
     if isinstance(source, str) and source and "://" not in source and not source.startswith("/dev/"):
