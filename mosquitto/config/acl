@@ -16,5 +16,4 @@ topic read station/#
 topic read sentinel/#
 topic read homeassistant/#
 topic write station/+/cmd/#
-
 topic write station/+/buzzer/set
