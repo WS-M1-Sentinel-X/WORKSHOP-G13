@@ -7,7 +7,6 @@ rtsp:
 webrtc:
   listen: ":8555"
 
-# Capture de la webcam USB, réglée par l'équipe : ne pas modifier. L'IA vision lit ce flux en RTSP.
 streams:
   camera_usb:
-    - "ffmpeg:/dev/video1#video=h264"
+    - exec:ffmpeg -hide_banner -loglevel error -f v4l2 -input_format mjpeg -video_size 640x360 -framerate 5 -i /dev/video0 -an -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -profile:v baseline -g 5 -keyint_min 5 -bf 0 -threads 1 -flush_packets 1 -rtsp_transport tcp -f rtsp {output}

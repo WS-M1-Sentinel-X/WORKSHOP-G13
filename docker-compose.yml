@@ -5,8 +5,8 @@ services:
     container_name: sentinel-mqtt
     restart: unless-stopped
     ports:
-      - "1883:1883"
-      - "9001:9001" # MQTT over WebSocket (optionnel)
+      - "192.168.0.100:1883:1883"
+      - "192.168.0.100:8883:8883"
     environment:
       MQTT_BROKER_PASSWORD_ESP8266: ${MQTT_BROKER_PASSWORD_ESP8266:?Definis MQTT_BROKER_PASSWORD_ESP8266 dans .env}
       MQTT_BROKER_PASSWORD_IA: ${MQTT_BROKER_PASSWORD_IA:?Definis MQTT_BROKER_PASSWORD_IA dans .env}
@@ -27,8 +27,10 @@ services:
         fi
         mosquitto_passwd -b /mosquitto/config/passwd ia "$$MQTT_BROKER_PASSWORD_IA"
         mosquitto_passwd -b /mosquitto/config/passwd homeassistant "$$MQTT_BROKER_PASSWORD_HOMEASSISTANT"
-        chown mosquitto:mosquitto /mosquitto/config/passwd /mosquitto/config/acl
+        chown mosquitto:mosquitto /mosquitto/config/passwd /mosquitto/config/acl /mosquitto/config/certs/server.key /mosquitto/config/certs/server.crt /mosquitto/config/certs/ca.crt /mosquitto/log
         chmod 0700 /mosquitto/config/passwd /mosquitto/config/acl
+        chmod 0600 /mosquitto/config/certs/server.key
+        chmod 0644 /mosquitto/config/certs/server.crt /mosquitto/config/certs/ca.crt
         exec mosquitto -c /mosquitto/config/mosquitto.conf
     networks:
       - sentinel-net
@@ -66,15 +68,12 @@ services:
     image: alexxit/go2rtc:latest
     container_name: sentinel-go2rtc
     restart: unless-stopped
-    devices: 
-      - "/dev/video1:/dev/video1"
+    devices:
+      - /dev/v4l/by-id/usb-USB_Camera_USB_Camera_202403071520007-video-index0:/dev/video0 # Caméra USB externe, chemin hôte stable
     volumes:
       - ./go2rtc:/config
     ports:
-      - "1984:1984"
-      - "8554:8554"
-      - "8555:8555/tcp"
-      - "8555:8555/udp"
+      - "192.168.0.100:8554:8554"
     networks:
       - sentinel-net
 
@@ -83,9 +82,8 @@ services:
     image: homeassistant/home-assistant:stable
     container_name: sentinel-homeassistant
     restart: unless-stopped
-    privileged: true # Souvent recommandé pour l'accès matériel / réseau local si besoin
     ports:
-      - "8123:8123"
+      - "192.168.0.100:8123:8123"
     volumes:
       - ha_config:/config
       - /etc/localtime:/etc/localtime:ro
@@ -98,8 +96,6 @@ services:
       - sentinel-net
 
   # IA vision : YOLOv8n sur le flux webcam relayé par go2rtc, flux annoté MJPEG sur :8090
-  # IA vision : lit le flux de go2rtc (RTSP), YOLOv8n en OpenVINO, contrôle d'accès par visage.
-  # Réglages pour le Celeron N4120 dans .env : MODELE_YOLO + TAILLE_YOLO, IPS_MAX (analyses/s).
   ia-vision:
     build: ./ia
     image: sentinel-ia
@@ -111,16 +107,15 @@ services:
       - MQTT_PORT=1883
       - MQTT_UTILISATEUR=ia
       - MQTT_MOT_DE_PASSE=${MQTT_BROKER_PASSWORD_IA:?Definis MQTT_BROKER_PASSWORD_IA dans .env}
-      - SOURCE_VIDEO=rtsp://go2rtc:8554/camera_usb
-      - MODELE_YOLO=${MODELE_YOLO:-yolov8n_320_int8_openvino_model}
-      - TAILLE_YOLO=${TAILLE_YOLO:-320}
-      - IPS_MAX=${IPS_MAX:-5}
+      - SOURCE_VIDEO=rtsp://go2rtc:8554/${CAMERA_STREAM:-camera_usb}
+      - INTERVALLE_IMAGES=${INTERVALLE_IMAGES:-5}
+      - OPENCV_THREADS=${OPENCV_THREADS:-1}
+      - OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}
+      - MKL_NUM_THREADS=${MKL_NUM_THREADS:-1}
       - API_ALERTES=${API_ALERTES:-}
       - TZ=Europe/Paris
     volumes:
-      - ia_donnees:/donnees # captures horodatées des inconnus (preuves) + bibliothèque de personnes
-    ports:
-      - "8090:8090"
+      - ia_donnees:/donnees # captures horodatées des intrusions (preuves)
     depends_on:
       - mqtt
       - go2rtc
@@ -129,11 +124,10 @@ services:
 
   # IA prédictive : Isolation Forest sur les mesures capteurs reçues par MQTT
   ia-anomalies:
-    build: ./ia
     image: sentinel-ia
     container_name: sentinel-ia-anomalies
     restart: unless-stopped
-    command: ["python", "anomalies.py", "--apprentissage", "${IA_APPRENTISSAGE:-600}"]
+    command: ["python", "anomalies.py", "--apprentissage", "${IA_APPRENTISSAGE:-1200}"]
     environment:
       - MQTT_HOTE=mqtt
       - MQTT_PORT=1883
@@ -145,6 +139,7 @@ services:
       - ia_donnees:/donnees # modèle appris : conservé entre deux redémarrages
     depends_on:
       - mqtt
+      - ia-vision # construit l'image sentinel-ia partagée
     networks:
       - sentinel-net
 

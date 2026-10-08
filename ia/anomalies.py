@@ -14,6 +14,7 @@ et chaque nouvelle anomalie part aussi en POST /api/v1/alerts.
 import argparse
 import json
 import logging
+import math
 from collections import deque
 
 import joblib
@@ -25,6 +26,11 @@ from commun import DONNEES, charger_config, creer_client_mqtt, declarer_entite, 
 NOM = "anomalies"
 FICHIER_MODELE = DONNEES / "modele_anomalies.joblib"
 GRANDEURS = ["temperature", "humidite", "gaz"]
+BORNES = {
+    "temperature": (-20, 80),
+    "humidite": (0, 100),
+    "gaz": (0, 1023),
+}
 COLONNES = GRANDEURS + [f"pente_{g}" for g in GRANDEURS]
 TOPIC_ETAT = "sentinel/ia/anomalies/etat"
 log = logging.getLogger("sentinel-ia")
@@ -52,8 +58,18 @@ class DetecteurAnomalies:
         self.en_anomalie = False
 
     # --- caractéristiques ---------------------------------------------------
+    def valider_mesure(self, mesure):
+        valeurs = {}
+        for grandeur, (bas, haut) in BORNES.items():
+            valeur = float(mesure[grandeur])
+            if not math.isfinite(valeur) or not bas <= valeur <= haut:
+                raise ValueError(f"{grandeur} hors plage : {valeur}")
+            valeurs[grandeur] = valeur
+        return valeurs
+
     def caracteristiques(self, mesure):
-        self.fenetre.append([float(mesure[g]) for g in GRANDEURS])
+        valeurs = self.valider_mesure(mesure)
+        self.fenetre.append([valeurs[g] for g in GRANDEURS])
         if len(self.fenetre) < self.fenetre.maxlen:
             return None  # pas encore assez d'historique pour calculer les pentes
         historique = np.array(self.fenetre)

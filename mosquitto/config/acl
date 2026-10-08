@@ -8,10 +8,12 @@ user ia
 topic read station/#
 topic read sentinel/#
 topic write sentinel/#
-topic write homeassistant/#
+topic write homeassistant/+/sentinel_ia/#
 
 user homeassistant
 topic read station/#
 topic read sentinel/#
 topic read homeassistant/#
 topic write station/+/cmd/#
+
+topic write station/+/buzzer/set
