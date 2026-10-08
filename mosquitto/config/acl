@@ -3,6 +3,7 @@ user esp8266
 topic write station/+/capteurs
 topic write station/+/etat
 topic read station/+/cmd/#
+topic read station/+/buzzer/set
 
 user ia
 topic read station/#
