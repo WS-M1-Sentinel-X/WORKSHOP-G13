@@ -10,6 +10,7 @@ par personne enregistrée (voir la note RGPD du README).
 """
 
 import logging
+import os
 import re
 import time
 import unicodedata
@@ -25,8 +26,10 @@ MODELES = DOSSIER / "modeles"
 FICHIER_DETECTEUR = MODELES / "face_detection_yunet_2023mar.onnx"
 FICHIER_RECONNAISSANCE = MODELES / "face_recognition_sface_2021dec.onnx"
 BIBLIOTHEQUE = DONNEES / "personnes"
-# Seuil recommandé par les auteurs de SFace pour la similarité cosinus.
-SEUIL_SIMILARITE = 0.363
+# Les auteurs de SFace recommandent 0,363 ; avec notre webcam (faible résolution, visages de profil),
+# des personnes différentes atteignaient 0,36-0,40 : on exige 0,45 pour ne jamais prendre un inconnu pour un autre.
+SEUIL_SIMILARITE = float(os.getenv("SEUIL_VISAGE") or 0.45)
+VOTES_IDENTIFICATION = 2  # même nom trouvé sur 2 analyses d'affilée avant de l'afficher
 TAILLE_MIN_VISAGE = 40  # px : en dessous, le visage est trop petit pour être reconnu
 
 
@@ -117,13 +120,20 @@ class Visages:
 
 
 def sauvegarder_personne(nom, signatures, photo):
-    """Ajoute (ou remplace) une personne dans la bibliothèque : signatures + nom + photo d'identification."""
+    """Ajoute une personne à la bibliothèque (signatures + nom + photo d'identification).
+
+    Si elle y est déjà, les nouvelles signatures s'ajoutent aux anciennes (30 au plus) : se faire
+    réenregistrer sous un autre angle ou une autre lumière améliore la reconnaissance."""
     BIBLIOTHEQUE.mkdir(parents=True, exist_ok=True)
     base = nom_fichier(nom)
-    np.save(BIBLIOTHEQUE / f"{base}.npy", np.vstack(signatures).astype(np.float32))
+    nouvelles = np.vstack(signatures).astype(np.float32)
+    if (BIBLIOTHEQUE / f"{base}.npy").exists():
+        anciennes = np.load(BIBLIOTHEQUE / f"{base}.npy", allow_pickle=False)
+        nouvelles = np.vstack([anciennes, nouvelles])[-30:]
+    np.save(BIBLIOTHEQUE / f"{base}.npy", nouvelles)
     (BIBLIOTHEQUE / f"{base}.nom").write_text(nom, encoding="utf-8")
     cv2.imwrite(str(BIBLIOTHEQUE / f"{base}.jpg"), photo)
-    log.info("%s enregistré(e) avec %d signature(s) dans %s", nom, len(signatures), BIBLIOTHEQUE)
+    log.info("%s enregistré(e) : %d signature(s) au total dans %s", nom, len(nouvelles), BIBLIOTHEQUE)
 
 
 def iou(a, b):
@@ -158,7 +168,8 @@ class Suivi:
                 piste = meilleure
             else:
                 piste = {"numero": self.prochain_numero, "nom": None, "debut": maintenant,
-                         "visage_inconnu": 0, "alerte": False}
+                         "visage_inconnu": 0, "alerte": False, "candidat": None, "votes": 0, "similarite": 0.0,
+                         "vu_visage": 0.0, "derniere_verif": 0.0, "contradictions": 0}
                 self.prochain_numero += 1
                 self.pistes.append(piste)
             piste["boite"], piste["vu"] = boite, maintenant

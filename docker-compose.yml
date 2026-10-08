@@ -112,7 +112,8 @@ services:
       - OPENCV_THREADS=${OPENCV_THREADS:-1}
       - OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}
       - MKL_NUM_THREADS=${MKL_NUM_THREADS:-1}
-      - API_ALERTES=${API_ALERTES:-}
+      - API_ALERTES=${API_ALERTES:-http://api:8000/api/v1/alerts}
+      - API_JETON=${API_JETON:-}
       - TZ=Europe/Paris
     volumes:
       - ia_donnees:/donnees # captures horodatées des intrusions (preuves)
@@ -133,7 +134,8 @@ services:
       - MQTT_PORT=1883
       - MQTT_UTILISATEUR=ia
       - MQTT_MOT_DE_PASSE=${MQTT_BROKER_PASSWORD_IA:?Definis MQTT_BROKER_PASSWORD_IA dans .env}
-      - API_ALERTES=${API_ALERTES:-}
+      - API_ALERTES=${API_ALERTES:-http://api:8000/api/v1/alerts}
+      - API_JETON=${API_JETON:-}
       - TZ=Europe/Paris
     volumes:
       - ia_donnees:/donnees # modèle appris : conservé entre deux redémarrages
@@ -143,9 +145,24 @@ services:
     networks:
       - sentinel-net
 
+  # API des alertes (POST /api/v1/alerts) + historique SQLite. Interne au réseau Docker : non exposée sur le Wi-Fi.
+  api:
+    build: ./api
+    image: sentinel-api
+    container_name: sentinel-api
+    restart: unless-stopped
+    environment:
+      - API_JETON=${API_JETON:-}
+      - TZ=Europe/Paris
+    volumes:
+      - api_donnees:/donnees # base SQLite des alertes
+    networks:
+      - sentinel-net
+
 volumes:
   ha_config:
   ia_donnees:
+  api_donnees:
 
 networks:
   sentinel-net:

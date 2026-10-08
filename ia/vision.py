@@ -34,7 +34,7 @@ import cv2
 from ultralytics import YOLO
 
 from commun import DONNEES, DOSSIER, charger_config, creer_client_mqtt, declarer_entite, envoyer_alerte
-from visages import Suivi, Visages, sauvegarder_personne
+from visages import VOTES_IDENTIFICATION, Suivi, Visages, sauvegarder_personne
 
 NOM = "vision"
 TOPIC_ETAT = "sentinel/ia/vision/etat"
@@ -57,6 +57,10 @@ DELAI_SANS_VISAGE = 8.0  # s : une personne qui ne montre jamais son visage devi
 VISAGES_INCONNUS_AVANT_ALERTE = 3  # visage vu mais pas reconnu sur 3 analyses d'affilée
 INTERVALLE_ANNONCES = 15.0  # s entre deux annonces vocales
 VERT, ROUGE, ORANGE = (0, 200, 0), (0, 0, 255), (0, 165, 255)
+# Le suivi garde le nom d'une personne d'une image à l'autre, même visage caché. Pour ne pas afficher une
+# identité invérifiée : le visage est revérifié toutes les 2 s, et le nom passe en orange « ? » s'il n'a pas
+# été revu depuis 10 s. Deux revérifications contradictoires retirent le nom (cadres échangés).
+INTERVALLE_REVERIFICATION, MEMOIRE_IDENTITE, CONTRADICTIONS_MAX = 2.0, 10.0, 2
 log = logging.getLogger("sentinel-ia")
 
 
@@ -86,7 +90,7 @@ class LecteurDirect:
     on évite 25 conversions de couleur inutiles par seconde.
     """
 
-    def __init__(self, source):
+    def __init__(self, source, ips_affichage=20):
         self.source = source
         self.camera = ouvrir(source)
         if not self.camera.isOpened():
@@ -95,6 +99,11 @@ class LecteurDirect:
         self.numero = 0
         self.demande = threading.Event()
         self.prete = threading.Event()
+        # Images converties pour la vidéo annotée, à rythme fixe et indépendamment de l'analyse.
+        self.pause_affichage = 1 / ips_affichage
+        self.prochain_affichage = 0.0
+        self.image_affichage = None
+        self.numero_affichage = 0
         threading.Thread(target=self._lire, daemon=True).start()
 
     def _lire(self):
@@ -110,9 +119,20 @@ class LecteurDirect:
                     echecs = 0
                 continue
             echecs = 0
-            if self.demande.is_set():
+            maintenant = time.monotonic()
+            # Échéancier plutôt qu'un délai minimal : sur un flux à 30 images/s, viser 20 images/s
+            # affiche en moyenne 2 images sur 3 (un délai minimal n'en garderait qu'une sur 2).
+            pour_affichage = maintenant >= self.prochain_affichage
+            if self.demande.is_set() or pour_affichage:
                 ok, image = self.camera.retrieve()
-                if ok:
+                if not ok:
+                    continue
+                if pour_affichage:
+                    self.image_affichage = image
+                    self.prochain_affichage = max(self.prochain_affichage + self.pause_affichage,
+                                                  maintenant - self.pause_affichage)
+                    self.numero_affichage += 1
+                if self.demande.is_set():
                     self.image, self.numero = image, self.numero + 1
                     self.demande.clear()
                     self.prete.set()
@@ -123,6 +143,24 @@ class LecteurDirect:
         self.demande.set()
         self.prete.wait()
         return self.numero, self.image
+
+
+def afficher_en_continu(lecteur, flux, dessin):
+    """Fil d'affichage : chaque nouvelle image du lecteur reçoit les derniers cadres de l'analyse.
+
+    La vidéo annotée suit ainsi le rythme du flux (~20 images/s) même si l'analyse n'en traite que 5.
+    """
+    dernier = 0
+    while True:
+        if lecteur.numero_affichage == dernier or lecteur.image_affichage is None:
+            time.sleep(0.01)
+            continue
+        dernier, image = lecteur.numero_affichage, lecteur.image_affichage
+        if image.shape[1] != LARGEUR:
+            image = cv2.resize(image, (LARGEUR, round(image.shape[0] * LARGEUR / image.shape[1])))
+        else:
+            image = image.copy()
+        flux.mettre_a_jour(dessiner(image, dessin["pistes"], dessin["ms"]))
 
 
 class LecteurFichier:
@@ -160,7 +198,9 @@ def annoncer(voix, texte):
 def dessiner(image, pistes, inference_ms):
     for piste in pistes:
         x1, y1, x2, y2 = (int(v) for v in piste["boite"])
-        if piste["nom"]:
+        if piste["nom"] and time.monotonic() - piste["vu_visage"] > MEMOIRE_IDENTITE:
+            couleur, texte = ORANGE, f"{piste['nom']} ?"
+        elif piste["nom"]:
             couleur, texte = VERT, piste["nom"]
         elif piste["alerte"]:
             couleur, texte = ROUGE, "INCONNU"
@@ -168,8 +208,12 @@ def dessiner(image, pistes, inference_ms):
             couleur, texte = ORANGE, "identification..."
         cv2.rectangle(image, (x1, y1), (x2, y2), couleur, 3 if couleur == ROUGE else 2)
         (l, h), _ = cv2.getTextSize(texte, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-        cv2.rectangle(image, (x1, max(0, y1 - h - 10)), (x1 + l + 8, y1), couleur, -1)
-        cv2.putText(image, texte, (x1 + 4, y1 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        # Étiquette au-dessus du cadre, ou juste dedans quand le cadre touche le haut de l'image
+        # (personne proche de la caméra) : sinon le nom sortirait de l'image.
+        haut = y1 - h - 10 if y1 - h - 10 >= 0 else y1
+        x1 = min(max(0, x1), image.shape[1] - l - 8)
+        cv2.rectangle(image, (x1, haut), (x1 + l + 8, haut + h + 10), couleur, -1)
+        cv2.putText(image, texte, (x1 + 4, haut + h + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
     cv2.putText(image, f"{inference_ms} ms", (10, image.shape[0] - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
     return image
 
@@ -268,8 +312,12 @@ def declarer_entites_ha(client, cfg):
         "state_class": "measurement", "icon": "mdi:timer-outline",
         "value_template": "{{ value_json.inference_ms }}",
     })
-    declarer_entite(client, cfg, NOM, "camera", "derniere_intrusion", {
-        "name": "Dernier inconnu", "topic": TOPIC_IMAGE,
+    # Entité « image » : Home Assistant l'affiche dès qu'une nouvelle photo arrive (une entité « camera »
+    # n'est rafraîchie que toutes les 10 s par le tableau de bord). L'ancienne entité caméra est retirée.
+    client.publish(f"{cfg['prefixe_discovery']}/camera/sentinel_ia/derniere_intrusion/config", "", retain=True)
+    declarer_entite(client, cfg, NOM, "image", "dernier_inconnu", {
+        "name": "Dernier inconnu", "icon": "mdi:account-alert",
+        "image_topic": TOPIC_IMAGE, "content_type": "image/jpeg",
     })
     declarer_entite(client, cfg, NOM, "text", "nom_a_enregistrer", {
         "name": "Nom à enregistrer", "icon": "mdi:account-plus",
@@ -364,11 +412,14 @@ def main():
                    or (str(DOSSIER / MODELE_OPTIMISE) if optimise_present else "yolov8n.pt"))
     taille = args.taille or int(os.getenv("TAILLE_YOLO") or (TAILLE_OPTIMISEE if optimise_present else LARGEUR))
     pause_min = 1 / (args.ips or float(os.getenv("IPS_MAX") or 5))
+    # Vidéo affichée plus fluide que l'analyse : entre deux analyses, les images suivantes sont montrées
+    # avec les derniers cadres connus (dessiner coûte quelques ms, analyser en coûte ~60 sur le Celeron).
+    ips_affichage = float(os.getenv("IPS_AFFICHAGE") or 20)
     # Un flux réseau, une webcam (/dev/video*, index) : temps réel. Un fichier : toutes les images.
     if isinstance(source, str) and source and "://" not in source and not source.startswith("/dev/"):
         lecteur = LecteurFichier(source)
     else:
-        lecteur = LecteurDirect(source or args.camera)
+        lecteur = LecteurDirect(source or args.camera, ips_affichage)
 
     # Le port du flux sert aussi de verrou : une 2e instance s'arrête ici au lieu de doubler la charge CPU.
     flux = FluxMJPEG()
@@ -416,6 +467,10 @@ def main():
     client.on_message = a_la_reception
     client.loop_start()
 
+    # Derniers cadres connus, partagés avec le fil d'affichage de la vidéo annotée.
+    dessin = {"pistes": [], "ms": 0.0}
+    if isinstance(lecteur, LecteurDirect):
+        threading.Thread(target=afficher_en_continu, args=(lecteur, flux, dessin), daemon=True).start()
     presence = Presence()
     dernier_envoi = 0.0
     etat_precedent = None
@@ -446,11 +501,42 @@ def main():
                 visage = visages.detecter_haut_du_corps(image, piste["boite"])
                 if visage is not None:
                     nom, similarite = visages.identifier(visages.signature(image, visage))
-                    if nom:
-                        piste["nom"], piste["visage_inconnu"] = nom, 0
-                        log.info("Personne identifiée : %s (similarité %.2f)", nom, similarite)
-                    else:
+                    if not nom:
                         piste["visage_inconnu"] += 1
+                        piste["candidat"], piste["votes"] = None, 0
+                        continue
+                    # Vote : le même nom sur 2 analyses d'affilée, pour écarter une ressemblance de passage.
+                    piste["votes"] = piste["votes"] + 1 if piste["candidat"] == nom else 1
+                    piste["candidat"] = nom
+                    if piste["votes"] < VOTES_IDENTIFICATION:
+                        continue
+                    # Une personne n'est qu'à un seul endroit : si son nom est déjà sur un autre cadre,
+                    # seul le cadre le plus ressemblant le garde.
+                    autre = next((p for p in pistes if p is not piste and p["nom"] == nom), None)
+                    if autre is not None:
+                        if autre["similarite"] >= similarite:
+                            continue
+                        autre["nom"], autre["candidat"], autre["votes"] = None, None, 0
+                    piste["nom"], piste["similarite"], piste["visage_inconnu"] = nom, similarite, 0
+                    piste["vu_visage"], piste["derniere_verif"], piste["contradictions"] = time.monotonic(), time.monotonic(), 0
+                    log.info("Personne identifiée : %s (similarité %.2f)", nom, similarite)
+
+            # Revérification des personnes déjà identifiées (peu coûteux : une fois toutes les 2 s).
+            for piste in pistes:
+                if not piste["nom"] or time.monotonic() - piste["derniere_verif"] < INTERVALLE_REVERIFICATION:
+                    continue
+                piste["derniere_verif"] = time.monotonic()
+                visage = visages.detecter_haut_du_corps(image, piste["boite"])
+                if visage is None:
+                    continue  # visage caché : le nom reste, puis passe en orange « ? » après 10 s
+                nom, similarite = visages.identifier(visages.signature(image, visage))
+                if nom == piste["nom"]:
+                    piste["vu_visage"], piste["contradictions"] = time.monotonic(), 0
+                    continue
+                piste["contradictions"] += 1
+                if piste["contradictions"] >= CONTRADICTIONS_MAX:
+                    log.info("Identité retirée : %s (le visage revu ne correspond plus)", piste["nom"])
+                    piste["nom"], piste["candidat"], piste["votes"], piste["contradictions"] = None, None, 0, 0
 
             maintenant = time.monotonic()
             nouveaux_inconnus = []
@@ -463,8 +549,10 @@ def main():
                     nouveaux_inconnus.append(piste)
 
             presence.mettre_a_jour(len(pistes) > 0)
+            dessin["pistes"], dessin["ms"] = pistes, inference_ms
             annotee = dessiner(image.copy(), pistes, inference_ms)
-            flux.mettre_a_jour(annotee)
+            if isinstance(lecteur, LecteurFichier):
+                flux.mettre_a_jour(annotee)
 
             connus = sorted({p["nom"] for p in pistes if p["nom"]})
             inconnus = sum(1 for p in pistes if p["alerte"])
@@ -504,7 +592,7 @@ def main():
                 cv2.imshow("Sentinel-X vision", annotee)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
-            # Rythme plafonné : sur le Celeron, analyser plus vite affamerait Mosquitto et Home Assistant.
+            # Rythme d'analyse plafonné : sur le Celeron, analyser plus vite affamerait Mosquitto et HA.
             reste = pause_min - (time.monotonic() - debut_tour)
             if reste > 0 and not isinstance(lecteur, LecteurFichier):
                 time.sleep(reste)

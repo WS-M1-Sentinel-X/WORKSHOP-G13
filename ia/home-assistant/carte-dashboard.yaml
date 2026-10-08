@@ -26,5 +26,6 @@ cards:
       - sensor.sentinel_ia_cause
       - sensor.sentinel_ia_phase
   - type: picture-entity
-    entity: camera.sentinel_ia_derniere_intrusion
-    name: Dernière intrusion (preuve)
+    entity: image.sentinel_ia_dernier_inconnu
+    name: Dernier inconnu (preuve)
+    show_state: false

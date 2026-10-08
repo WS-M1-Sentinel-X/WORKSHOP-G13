@@ -81,6 +81,47 @@ bouton sans nom refusé, puis 5 prises, enregistrement et reconnaissance (simila
 « ON »/« OFF »). L'IA vision écoute désormais ce topic : un inconnu vu par la caméra pendant que le PIR détecte un
 mouvement donne une alerte **critique** (« mouvement confirmé par le PIR ») au lieu de « haute ». Testé avant déploiement.
 
+**API des alertes en service (15h03)** : aucune API n'existait encore pour `POST /api/v1/alerts`. Ajout d'un service
+`api` (Python standard + SQLite, non-root, interne au réseau Docker, jeton `API_JETON`). Testé : requête sans jeton
+refusée (401), JSON invalide refusé (400), gravité inconnue refusée (422), tentative d'injection SQL stockée comme simple
+texte (requêtes paramétrées). Sur le serveur, première vraie alerte reçue à 15h04 : « Personne non enregistrée détectée
+(1 inconnu, 1 personne identifiée : Joris Martins) ». Sauvegarde : `~/sauvegarde-avant-api-20261008-1503/`.
+
+**Noms des personnes de nouveau visibles (15h10)** : quand une personne est proche de la caméra, son cadre touche le
+haut de l'image et l'étiquette (nom ou « INCONNU ») était dessinée hors de l'image. Elle est maintenant placée dans le cadre
+dans ce cas. Capture `08-noms-visibles-connu-inconnu.jpg` : Louis en vert avec son nom, un inconnu en rouge, 49,5 ms.
+
+**« Dernier inconnu » instantané dans Home Assistant (15h12)** : la photo était publiée sur MQTT dès l'alerte, mais
+l'entité « caméra » n'est rafraîchie que toutes les 10 s par le tableau de bord. Elle est remplacée par une entité
+« image » (`image.sentinel_ia_dernier_inconnu`), affichée dès qu'une nouvelle photo arrive.
+
+**Vidéo annotée plus fluide (15h17)** : la webcam envoie en réalité 30 images/s (go2rtc inchangé), mais le flux annoté
+n'affichait que les 5 images analysées par seconde. Entre deux analyses, l'IA affiche maintenant les images suivantes avec
+les derniers cadres connus. Mesures sur le serveur : flux annoté **5 → 11 images/s**, inférence inchangée (**56 ms**,
+p90 62 ms), CPU de l'IA vision 125 % → 160 % sur 400 %, go2rtc inchangé (20 %), charge 1,7 → 2,6 sur 4.
+Réglage : `IPS_AFFICHAGE` (15 par défaut). Sauvegarde : `ia/vision.py.bak-avant-fluide-*`.
+
+**Fausse identification corrigée : deux « Joris Martins » à l'écran (15h24)** : une personne non enregistrée, vue de
+profil, ressemblait à Joris à 0,36-0,40, juste au-dessus du seuil de 0,363 recommandé par SFace. Trois garde-fous :
+seuil relevé à **0,45** (réglable : `SEUIL_VISAGE`), **même nom sur 2 analyses d'affilée** avant de l'afficher, et
+**un nom sur un seul cadre à la fois** (le plus ressemblant le garde). En contrepartie, une personne enregistrée vue de
+profil peut rester « identification... » : se réenregistrer sous plusieurs angles **ajoute** des signatures (30 au plus)
+au lieu de remplacer les anciennes. Après déploiement : Joris reconnu à 0,70.
+
+**Cadres en direct sur le tableau de bord (15h36)** : la carte vidéo du tableau de bord « TDB-SENTINEL-X » lit le flux
+brut de go2rtc (sans cadres). Le flux annoté de l'IA plafonnait à ~11 images/s car il était dessiné par la boucle
+d'analyse. Il est maintenant produit par un fil séparé, au rythme du flux : **18 images/s** mesurées sur le serveur, avec
+une inférence inchangée (56 ms, p90 63 ms) et un CPU de l'IA plus bas qu'avant (135 % au lieu de 160 %, charge 1,85 sur 4).
+Home Assistant joint le flux annoté (`http://ia-vision:8090/flux`, réponse 200, MJPEG) : il suffit de l'ajouter comme
+caméra « MJPEG IP Camera » et de l'afficher sur la carte vidéo.
+
+**« Joris reconnu sans son visage » (15h43)** : ce n'était pas un biais sur la couleur du t-shirt (la reconnaissance ne
+regarde que le visage, recadré et aligné). Joris avait été identifié à 15h36 visage visible (0,74), puis le **suivi** a gardé
+son nom sur son cadre pendant qu'il se penchait (capture `09-torse-sans-visage-avant-correctif.jpg`). Correctif : le visage
+d'une personne identifiée est **revérifié toutes les 2 s** ; s'il n'a pas été revu depuis 10 s, le nom passe en orange
+« Joris Martins ? » ; si le visage revu ne correspond plus deux fois de suite (cadres échangés entre deux personnes), le nom
+est retiré et l'identification recommence. Après déploiement : 17,8 images/s, CPU de l'IA 139 %.
+
 ## Note RGPD
 
 Un visage est une donnée biométrique (article 9 du RGPD). Enregistrement volontaire uniquement ; on stocke une signature

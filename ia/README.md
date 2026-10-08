@@ -151,7 +151,7 @@ Pour activer MQTTS plus tard, ajoute un listener TLS `8883` dans la configuratio
 2. Dans HA : **Paramètres > Appareils et services > Ajouter > MQTT**, broker `mqtt` (le nom du service Docker), port 1883, utilisateur `homeassistant` et le mot de passe correspondant à `MQTT_BROKER_PASSWORD_HOMEASSISTANT`. La découverte (préfixe `homeassistant`) est active par défaut.
 3. Pour l'ESP8266, renseigner l'IP LAN de la machine Docker, l'utilisateur `esp8266` et `MQTT_BROKER_PASSWORD_ESP8266`. Le broker n'est plus celui d'un add-on ou de Home Assistant.
 4. Lancer tes scripts : l'appareil **« Sentinel-X IA »** apparaît tout seul avec ses entités :
-   - `binary_sensor.sentinel_ia_presence_humaine`, `sensor.sentinel_ia_personnes`, `sensor.sentinel_ia_inference_ms`, `camera.sentinel_ia_derniere_intrusion`
+   - `binary_sensor.sentinel_ia_presence_humaine`, `sensor.sentinel_ia_personnes`, `sensor.sentinel_ia_inference_ms`, `image.sentinel_ia_dernier_inconnu`
    - `sensor.sentinel_ia_score_risque`, `binary_sensor.sentinel_ia_anomalie`, `sensor.sentinel_ia_cause`, `sensor.sentinel_ia_phase`
 4. Ajouter l'intégration **MJPEG IP Camera** sur `http://ia-vision:8090/flux` (nomme-la « Flux webcam ») : HA et l'IA sont sur le même réseau Docker. Si tu lances `vision.py` hors Docker, utilise l'IP du PC à la place.
 5. Copier `home-assistant/automations.yaml` (buzzer + LED rouge sur intrusion ou anomalie) dans la config de HA, qui vit dans le volume Docker `ha_config` : `docker cp home-assistant/automations.yaml sentinel-homeassistant:/config/automations.yaml`, puis **Outils de développement > YAML > Recharger les automatisations**. Coller ensuite la carte `carte-dashboard.yaml` dans un tableau de bord.

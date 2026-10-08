@@ -28,6 +28,7 @@ Interfaces locales :
 | go2rtc | 8555/TCP+UDP | Sortie WebRTC |
 | IA vision | 8090/TCP | Flux webcam annoté par YOLOv8n (MJPEG) |
 | IA anomalies | - | Isolation Forest sur les mesures MQTT (aucun port) |
+| API des alertes | - (interne) | `POST/GET /api/v1/alerts`, historique SQLite, jeton `API_JETON` |
 
 ## WireGuard
 
@@ -94,3 +95,9 @@ Elles publient sur le broker Mosquitto dedie (entites creees automatiquement dan
 Mode d'emploi complet : [ia/README.md](ia/README.md).
 
 Le broker MQTT est independant de Home Assistant : si Home Assistant est arrete, l'ESP8266 et les scripts IA peuvent continuer a communiquer. Ne pas publier directement les ports Home Assistant, MQTT ou go2rtc sur Internet. Utiliser WireGuard pour l'acces distant.
+## API des alertes
+
+Le service `api` (dossier `api/`) reçoit les alertes des IA en `POST /api/v1/alerts` et les historise dans SQLite
+(volume `api_donnees`). Il n'est joignable que depuis le réseau Docker : le dashboard ou Home Assistant le lisent via
+`GET http://api:8000/api/v1/alerts?limite=50`, avec l'en-tête `Authorization: Bearer <API_JETON>`.
+Santé : `GET /api/v1/sante`. Python seul (bibliothèque standard), conteneur non-root, requêtes SQL paramétrées.
